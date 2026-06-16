@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RealCity3000 — Scientific Urban Growth & AI Simulation Sandbox</title>
+  <!-- Google Fonts: Inter for UI, JetBrains Mono for CAD/GIS data readouts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- FontAwesome for CAD/GIS UI icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* Immediate fallback block to prevent FOUC */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #08080c;
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <!-- Main Application Container -->
+  <div id="app">
+    <!-- Global Fullscreen Loading Overlay -->
+    <div id="simulation-loading" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <span class="loading-text" id="loading-status-text">Generating Sandbox Grid...</span>
+    </div>
+    <!-- View 1: Map Selection Phase -->
+    <div id="view-map" class="view-panel active">
+      <div class="sidebar panel-animate">
+        <div class="brand">
+          <i class="fa-solid fa-city brand-icon"></i>
+          <h1>RealCity3000</h1>
+        </div>
+        <p class="tagline" style="margin-bottom: 5px;">Geospatial Urban Simulation Sandbox</p>
+        <p style="font-size: 9px; color: var(--text-secondary); font-family: var(--font-mono); text-transform: uppercase; margin-bottom: 24px; opacity: 0.7;">by Union Nikola Tesla University Academic Staff Team</p>
+        
+        <div class="sidebar-section">
+          <h3 data-tooltip="Select Region: Search for geographical areas or pan/zoom the map. Draw a bounding box to extract vector networks and seed the simulation."><i class="fa-solid fa-map-location-dot"></i> 1. Select Region</h3>
+          <p class="instructions">Search for an urban area or pan the map. Draw a bounding box to extract geometry and seed the simulation grid.</p>
+          <div class="search-box" style="margin-bottom: 10px;">
+            <input type="text" id="map-search-input" placeholder="Search city or coords..." data-tooltip="Search location by name or coordinates (lat,lng)" />
+            <button id="map-search-btn" data-tooltip="Execute regional location search"><i class="fa-solid fa-magnifying-glass"></i></button>
+          </div>
+          <button id="draw-bbox-btn" class="btn btn-block" data-tooltip="Enable drawing a bounding box area on the map to initialize the simulation grid"><i class="fa-solid fa-square-plus"></i> Draw Bounding Box</button>
+        </div>
+
+        <div class="sidebar-section">
+          <h3 data-tooltip="Grid Dimensions: Configure width and height resolution parameter for the rasterized CAD simulation grid."><i class="fa-solid fa-gears"></i> 2. Grid Dimensions</h3>
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>Target Grid Resolution</span>
+              <span id="grid-res-display">50 × 50</span>
+            </div>
+            <input type="range" id="grid-res-slider" min="20" max="150" step="5" value="50" data-tooltip="Adjust target grid cellular width/height. Higher resolution models are more detailed but run slower." />
+            <div class="perf-indicator" id="perf-indicator">
+              <span class="dot green"></span>
+              <span class="label">Performance Status: Optimal</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3 data-tooltip="AI Inference: Toggle between universal or split API keys to enable Satellite computer vision analysis and AI Mayor planning."><i class="fa-solid fa-key"></i> 3. AI Inference (Optional)</h3>
+          <div class="key-mode-toggle" data-tooltip="Toggle between using a single API key for all AI features, or separate specialized keys.">
+            <label class="toggle-switch">
+              <input type="checkbox" id="universal-key-toggle" checked />
+              <span class="slider-toggle"></span>
+            </label>
+            <span>Use Single Universal Key</span>
+          </div>
+
+          <div id="single-key-container" class="key-input-container">
+            <div class="input-wrapper">
+              <input type="password" id="universal-api-key" placeholder="Enter API Key..." data-tooltip="Enter your API key here (saved locally in session memory)" />
+              <button class="toggle-password-btn" data-target="universal-api-key"><i class="fa-solid fa-eye"></i></button>
+            </div>
+            <select id="universal-provider" class="dropdown-input" data-tooltip="Select API endpoint provider or local rules-based simulation math engine">
+              <option value="local">Local Mathematical Engine (No API Key)</option>
+              <option value="openrouter">OpenRouter (DeepSeek/Llama/Mistral)</option>
+              <option value="openai">OpenAI (GPT-4o-mini)</option>
+              <option value="anthropic">Anthropic (Claude 3.5 Haiku)</option>
+              <option value="gemini">Google Gemini (Gemini 2.5 Flash)</option>
+              <option value="groq">Groq (Llama 3)</option>
+              <option value="deepseek">DeepSeek API (V3/R1)</option>
+            </select>
+          </div>
+
+          <div id="split-keys-container" class="key-input-container hidden">
+            <div class="key-field">
+              <label>Satellite Vision Key</label>
+              <div class="input-wrapper">
+                <input type="password" id="vision-api-key" placeholder="Vision Key..." data-tooltip="API Key for Satellite computer vision classification model" />
+              </div>
+            </div>
+            <div class="key-field">
+              <label>AI Mayor (Planning) Key</label>
+              <div class="input-wrapper">
+                <input type="password" id="mayor-api-key" placeholder="Mayor Key..." data-tooltip="API Key for Mayor agent governance policy decision making" />
+              </div>
+            </div>
+            <div class="key-field">
+              <label>Historical Research Key</label>
+              <div class="input-wrapper">
+                <input type="password" id="history-api-key" placeholder="History Key..." data-tooltip="API Key for fetching location-specific urban history research" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <button id="extract-data-btn" class="btn btn-primary btn-block disabled" data-tooltip="Extract OpenStreetMap vector geometries and initialize cellular simulation sandbox">
+            <i class="fa-solid fa-file-import"></i> Extract & Initialize Sandbox
+          </button>
+        </div>
+      </div>
+      
+      <!-- Bounding Box Map Viewport -->
+      <div id="map-selection-viewport"></div>
+    </div>
+
+    <!-- View 2: Active Simulation & Sandbox Sandbox Phase -->
+    <div id="view-sandbox" class="view-panel hidden">
+      <!-- Top CAD-style Toolbar -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <span class="project-title"><i class="fa-solid fa-compass-drafting"></i> RealCity3000 // Sandbox</span>
+          <span class="author-credits" style="font-size: 10px; color: var(--text-secondary); font-family: var(--font-mono); margin-left: 10px; border-left: 1px solid var(--border-glass); padding-left: 10px; opacity: 0.85;">by Union Nikola Tesla University Academic Staff Team</span>
+          <div class="toolbar-divider"></div>
+          <span class="bbox-readout" id="toolbar-bbox-coords">LAT: 0.000, LNG: 0.000</span>
+        </div>
+        
+        <div class="toolbar-center">
+          <div class="view-modes">
+            <button class="view-mode-btn active" data-view="2d" data-tooltip="2D Map: Flat GIS CAD blueprint, showing cell classifications and heatmap overlays."><i class="fa-solid fa-map"></i> 2D Map</button>
+            <button class="view-mode-btn" data-view="3d" data-tooltip="3D CAD: High-performance 3D visualizer showing extruded building heights and animated citizen agent capsules."><i class="fa-solid fa-cubes"></i> 3D CAD</button>
+            <button class="view-mode-btn" data-view="fps" id="fps-mode-btn" data-tooltip="FPS Explorer: Step onto the ground as a citizen agent and navigate using WASD controls and mouse looking."><i class="fa-solid fa-person-walking"></i> FPS Explorer</button>
+          </div>
+        </div>
+        
+        <div class="toolbar-right">
+          <button id="about-btn" class="btn" data-tooltip="View scientific methodologies, mathematical formulas, and project developer credits"><i class="fa-solid fa-circle-info"></i> About</button>
+          <div class="dropdown">
+            <button id="export-dropdown-btn" class="btn" data-tooltip="Export current simulation grid, historical metrics table, screenshot canvas, or simulation report"><i class="fa-solid fa-download"></i> Export <i class="fa-solid fa-caret-down"></i></button>
+            <div class="dropdown-content">
+              <a href="#" id="export-json-btn" data-tooltip="Export current grid matrix and cellular parameters as a JSON file"><i class="fa-solid fa-file-code"></i> Save State (.json)</a>
+              <a href="#" id="export-csv-btn" data-tooltip="Export historical KPI metrics series as a CSV table"><i class="fa-solid fa-file-csv"></i> Metrics History (.csv)</a>
+              <a href="#" id="export-png-btn" data-tooltip="Download current 2D blueprint map visualization as a PNG image"><i class="fa-solid fa-file-image"></i> Capture Canvas (.png)</a>
+              <a href="#" id="export-sim-report-btn" data-tooltip="Download full text simulation run report including geographical metadata, parameters, and historical year-by-year KPI values"><i class="fa-solid fa-file-invoice"></i> Simulation Report (.txt)</a>
+            </div>
+          </div>
+          <button id="return-map-btn" class="btn btn-danger" data-tooltip="Return to the region selector page to define a new bounding box"><i class="fa-solid fa-arrow-rotate-left"></i> Re-Select Area</button>
+        </div>
+      </div>
+
+      <!-- Left Sidebar: Controls & Parameter Modifiers -->
+      <div class="simulation-sidebar">
+        <!-- Playback Panel -->
+        <div class="sim-panel playback-panel">
+          <div class="year-readout">
+            <span class="label">SIMULATION YEAR</span>
+            <span class="val" id="sim-year">Year 0000</span>
+          </div>
+          <div class="playback-controls">
+            <button id="sim-prev-btn" data-tooltip="Revert simulation state to Year 0000"><i class="fa-solid fa-backward-step"></i></button>
+            <button id="sim-play-btn" class="play-btn" data-tooltip="Start or pause continuous automatic simulation ticks"><i class="fa-solid fa-play"></i></button>
+            <button id="sim-step-btn" data-tooltip="Compute next year of urban growth and update all systems"><i class="fa-solid fa-forward-step"></i></button>
+            <button id="sim-reset-btn" data-tooltip="Revert simulation state to Year 0000"><i class="fa-solid fa-rotate-right"></i></button>
+          </div>
+          <div class="speed-slider">
+            <label><i class="fa-solid fa-gauge-high"></i> Speed</label>
+            <input type="range" id="sim-speed-slider" min="1" max="25" value="5" data-tooltip="Adjust simulation playback speed (up to 25 ticks/sec, ticks down to 30ms)" />
+          </div>
+        </div>
+
+        <!-- Preset Scenarios -->
+        <div class="sim-panel">
+          <h3 data-tooltip="Scenario Profile: Select a preset urban scenario to load customized growth parameters and environmental conditions."><i class="fa-solid fa-sliders"></i> Scenario Profile</h3>
+          <select id="scenario-preset-selector" class="dropdown-input" data-tooltip="Select a pre-configured scenario profile with custom initial growth parameters and environment rules">
+            <option value="natural">Natural Growth (Balanced)</option>
+            <option value="boom">Economic Boom (Hyper-Growth)</option>
+            <option value="eco">Sustainable Eco-City</option>
+            <option value="sprawl">Leapfrog Sprawl</option>
+            <option value="deluge">Climate Deluge (Rising Water)</option>
+            <option value="solarpunk">Solarpunk Reclamation</option>
+            <option value="cyberpunk">Cyberpunk Mega-Grid</option>
+            <option value="arcology">Subterranean Arcologies</option>
+            <option value="degrowth">Managed De-Growth</option>
+            <option value="domeworld">Space Dome Colony</option>
+          </select>
+        </div>
+
+        <!-- Parameter Modifiers Accordion -->
+        <div class="sim-panel parameters-panel">
+          <div class="section-header">
+            <h3 data-tooltip="Simulation Parameters: Dynamically adjust cellular automata growth rates, green protection limits, taxation, density caps, and pollution threshold controls."><i class="fa-solid fa-sliders"></i> Simulation Parameters</h3>
+          </div>
+          <div class="parameter-sliders-container">
+            <div class="slider-group">
+              <div class="slider-label"><span>Diffusion (Sprawl)</span><span id="val-diffusion">25</span></div>
+              <input type="range" class="param-slider" data-param="diffusion" min="0" max="100" value="25" data-tooltip="Diffusion (SLEUTH): Probability of spontaneous new growth outside existing development centers" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Breed (New Centers)</span><span id="val-breed">15</span></div>
+              <input type="range" class="param-slider" data-param="breed" min="0" max="100" value="15" data-tooltip="Breed (SLEUTH): Likelihood of creating a new urban center at spontaneous growth locations" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Spread (Organic)</span><span id="val-spread">30</span></div>
+              <input type="range" class="param-slider" data-param="spread" min="0" max="100" value="30" data-tooltip="Spread (SLEUTH): Probability of urban cells expanding outward into adjacent neighbors" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Road Gravity</span><span id="val-roadGravity">50</span></div>
+              <input type="range" class="param-slider" data-param="roadGravity" min="0" max="100" value="50" data-tooltip="Road Gravity (SLEUTH): Attraction factor pulling new developments closer to the road network" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Green Protection</span><span id="val-greenProtection">40</span></div>
+              <input type="range" class="param-slider" data-param="greenProtection" min="0" max="100" value="40" data-tooltip="Green Protection: Resistance level of forest and parks against being urbanized or destroyed" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Tax Rate</span><span id="val-taxRate">15%</span></div>
+              <input type="range" class="param-slider" data-param="taxRate" min="0" max="50" value="15" data-tooltip="Tax Rate: Macro tax rate affecting local investment capacity and resident satisfaction" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Environmental Regs</span><span id="val-environmentalReg">30</span></div>
+              <input type="range" class="param-slider" data-param="environmentalReg" min="0" max="100" value="30" data-tooltip="Environmental Regulations: Threshold restriction limiting industrial pollution footprint (slows industrial growth)" />
+            </div>
+            <div class="slider-group">
+              <div class="slider-label"><span>Density Cap</span><span id="val-densityCap">10</span></div>
+              <input type="range" class="param-slider" data-param="densityCap" min="1" max="20" value="10" data-tooltip="Density Cap: Maximum allowable building heights and density factors (1 to 20 stories)" />
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Mayor Controller -->
+        <div class="sim-panel ai-mayor-panel" data-tooltip="Enable the AI Mayor agent to analyze metrics and adjust parameters autonomously every year">
+          <div class="panel-header-row">
+            <h3 data-tooltip="AI Mayor Mode: Enable an autonomous planning agent that evaluates metrics and adjusts sliders dynamically to optimize city growth."><i class="fa-solid fa-user-tie"></i> AI Mayor Mode</h3>
+            <label class="toggle-switch">
+              <input type="checkbox" id="ai-mayor-toggle" />
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+          <div id="ai-mayor-status" class="ai-status-text">AI Mayor Offline</div>
+          <div id="ai-mayor-thoughts" class="ai-thoughts-box hidden">
+            <div class="thought-bubble-title">AI Planner Reasoning:</div>
+            <p id="ai-thought-content">Waiting for simulation step...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Visualizer Panel (Canvas & WebGL) -->
+      <div id="visualizer-container">
+        <!-- 2D Canvas Renderer Layer -->
+        <canvas id="canvas-2d" class="viz-layer"></canvas>
+        <!-- 3D Three.js WebGL Layer -->
+        <div id="canvas-3d-container" class="viz-layer hidden"></div>
+        
+        <!-- Legend Overlay -->
+        <div class="viz-overlay legend-panel glass-panel">
+          <h4>Land Classification</h4>
+          <div class="legend-items">
+            <div class="legend-item"><span class="color-box" style="background:#2a2d35;"></span> Vacant</div>
+            <div class="legend-item"><span class="color-box" style="background:#d4a574;"></span> Res (Low)</div>
+            <div class="legend-item"><span class="color-box" style="background:#e87040;"></span> Res (High)</div>
+            <div class="legend-item"><span class="color-box" style="background:#00d4ff;"></span> Commercial</div>
+            <div class="legend-item"><span class="color-box" style="background:#8b5cf6;"></span> Industrial</div>
+            <div class="legend-item"><span class="color-box" style="background:#22c55e;"></span> Park</div>
+            <div class="legend-item"><span class="color-box" style="background:#059669;"></span> Forest</div>
+            <div class="legend-item"><span class="color-box" style="background:#0ea5e9;"></span> Water</div>
+            <div class="legend-item"><span class="color-box" style="background:#94a3b8;"></span> Highway</div>
+            <div class="legend-item"><span class="color-box" style="background:#b45309;"></span> Brownfield</div>
+            <div class="legend-item"><span class="color-box" style="background:#eab308;"></span> Agricultural</div>
+            <div class="legend-item"><span class="color-box" style="background:#f43f5e;"></span> Institutional</div>
+          </div>
+        </div>
+
+        <!-- Render Force Layer Selector -->
+        <div class="viz-overlay layer-panel glass-panel">
+          <h4 data-tooltip="Visual Layer Force Fields: Select rendering overlay filters mapping spatial growth pressure, land rent gradient, accessibility index, and industrial pollution footprint.">Visual Layer Force Fields</h4>
+          <div class="layer-toggles">
+            <button class="layer-toggle-btn active" data-layer="none" data-tooltip="Render standard flat land-use color classifications"><i class="fa-solid fa-eye-slash"></i> Flat Zones</button>
+            <button class="layer-toggle-btn" data-layer="accessibility" data-tooltip="Overlay access scores mapping proximity to roads, highways and intersections"><i class="fa-solid fa-route"></i> Accessibility</button>
+            <button class="layer-toggle-btn" data-layer="value" data-tooltip="Overlay land value rent-gradient field based on central business accessibility"><i class="fa-solid fa-coins"></i> Land Value</button>
+            <button class="layer-toggle-btn" data-layer="pollution" data-tooltip="Overlay pollution index map illustrating industrial smoke output footprint"><i class="fa-solid fa-smog"></i> Pollution Field</button>
+            <button class="layer-toggle-btn" data-layer="pressure" data-tooltip="Overlay cellular automaton growth pressure mapping active developer interest"><i class="fa-solid fa-compress"></i> Growth Pressure</button>
+          </div>
+        </div>
+
+        <!-- FPS Mode Instruction Box -->
+        <div id="fps-instructions" class="viz-overlay fps-helper glass-panel hidden">
+          <h4><i class="fa-solid fa-keyboard"></i> FPS Navigation</h4>
+          <ul>
+            <li><strong>WASD</strong> / Arrow Keys to Move</li>
+            <li><strong>Mouse drag</strong> to Look Around</li>
+            <li><strong>SPACE</strong> to Jump</li>
+            <li><strong>ESC</strong> to exit first person view</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Right Sidebar: Metrics Dashboard -->
+      <div class="metrics-sidebar">
+        <div class="metrics-panel-header">
+          <h3 data-tooltip="Metrics Dashboard: Real-time key performance indicators tracking population growth, density, average land value, and city pollution levels."><i class="fa-solid fa-chart-line"></i> Metrics Dashboard</h3>
+        </div>
+        
+        <!-- Live KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="label">POPULATION</span>
+            <span class="val" id="metric-population">0</span>
+            <span class="trend neutral" id="trend-population"><i class="fa-solid fa-minus"></i> 0%</span>
+          </div>
+          <div class="kpi-card">
+            <span class="label">URBAN DENSITY</span>
+            <span class="val" id="metric-density">0.0%</span>
+            <span class="trend neutral" id="trend-density"><i class="fa-solid fa-minus"></i> 0%</span>
+          </div>
+          <div class="kpi-card">
+            <span class="label">AVG LAND VALUE</span>
+            <span class="val" id="metric-value">$0.00</span>
+            <span class="trend neutral" id="trend-value"><i class="fa-solid fa-minus"></i> 0%</span>
+          </div>
+          <div class="kpi-card">
+            <span class="label">POLLUTION INDEX</span>
+            <span class="val" id="metric-pollution">0.00</span>
+            <span class="trend neutral" id="trend-pollution"><i class="fa-solid fa-minus"></i> 0%</span>
+          </div>
+        </div>
+
+        <!-- RCI Demand Bars -->
+        <div class="metrics-section">
+          <h4 data-tooltip="RCI Demand: Visualizes the relative market pressure for residential (R), commercial (C), and industrial (I) development expansion.">RCI Development Demand</h4>
+          <div class="rci-indicator">
+            <div class="rci-bar-wrapper">
+              <span class="label">R</span>
+              <div class="rci-track"><div id="rci-res-bar" class="rci-fill res" style="height: 50%;"></div></div>
+            </div>
+            <div class="rci-bar-wrapper">
+              <span class="label">C</span>
+              <div class="rci-track"><div id="rci-com-bar" class="rci-fill com" style="height: 50%;"></div></div>
+            </div>
+            <div class="rci-bar-wrapper">
+              <span class="label">I</span>
+              <div class="rci-track"><div id="rci-ind-bar" class="rci-fill ind" style="height: 50%;"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Land Cover Chart -->
+        <div class="metrics-section">
+          <h4 data-tooltip="Land Use Distribution: Real-time grid-wide categorical allocation of natural, agricultural, residential, commercial, industrial, and infrastructure cell classifications.">Land Use Distribution</h4>
+          <div class="chart-container">
+            <canvas id="landuse-distribution-chart" width="240" height="130"></canvas>
+          </div>
+        </div>
+
+        <!-- History Chart Sparkline -->
+        <div class="metrics-section">
+          <h4 data-tooltip="Timeline Trend: Chronological line chart monitoring historical population growth, density percentages, land values, and pollution changes.">Timeline Series Trend</h4>
+          <div class="chart-container">
+            <canvas id="timeline-metrics-chart" width="240" height="120"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About Modal Dialog -->
+    <div id="about-modal" class="modal-overlay hidden">
+      <div class="modal-content glass-panel panel-animate">
+        <div class="modal-header">
+          <h2><i class="fa-solid fa-circle-info"></i> RealCity3000 Methodology & Science</h2>
+          <button id="close-about-btn" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body" id="about-modal-body">
+          <!-- Populated dynamically by AboutModal.js -->
+        </div>
+        <div class="modal-footer">
+          <button id="download-report-btn" class="btn btn-primary"><i class="fa-solid fa-file-pdf"></i> Download Methodology Report (.html)</button>
+          <button id="download-text-report-btn" class="btn"><i class="fa-solid fa-file-lines"></i> Download Textual Revision Log (.md)</button>
+          <button id="close-about-footer-btn" class="btn">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- JavaScript entry point -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

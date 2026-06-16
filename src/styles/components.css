@@ -1,0 +1,227 @@
+/* Component UI Styles for RealCity3000 */
+
+.btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-solid);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: #00ccda;
+  border-color: #00ccda;
+  color: var(--bg-primary);
+}
+
+.btn-primary.disabled {
+  background: var(--text-dim) !important;
+  border-color: var(--text-dim) !important;
+  color: var(--text-secondary) !important;
+  cursor: not-allowed !important;
+  opacity: 0.5;
+}
+
+.btn-danger {
+  background: rgba(255, 51, 81, 0.1);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.btn-danger:hover {
+  background: var(--accent-red);
+  color: #fff;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* Custom Styled Range Sliders */
+input[type="range"] {
+  -webkit-appearance: none;
+  background: transparent;
+  width: 100%;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  background: var(--border-solid);
+  border-radius: 2px;
+  border: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  margin-top: -4px;
+  box-shadow: 0 0 8px var(--accent);
+  transition: transform 0.1s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+}
+
+/* Checkbox Toggle Switches */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider-toggle {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--border-solid);
+  border-radius: 20px;
+  transition: .2s;
+}
+
+.slider-toggle:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: .2s;
+}
+
+input:checked + .slider-toggle {
+  background-color: var(--accent);
+}
+
+input:checked + .slider-toggle:before {
+  transform: translateX(14px);
+}
+
+/* Dropdowns */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  right: 0;
+  background-color: var(--bg-secondary);
+  min-width: 180px;
+  box-shadow: var(--shadow-main);
+  border: 1px solid var(--border-solid);
+  border-radius: 6px;
+  z-index: 1000;
+  margin-top: 4px;
+}
+
+.dropdown-content a {
+  color: var(--text-secondary);
+  padding: 10px 16px;
+  text-decoration: none;
+  display: block;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+
+.dropdown-content a:hover {
+  background-color: var(--bg-tertiary);
+  color: #fff;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+/* Perf Indicator Dot */
+.perf-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.perf-indicator .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.perf-indicator .dot.green {
+  background-color: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+}
+
+.perf-indicator .dot.amber {
+  background-color: var(--accent-amber);
+  box-shadow: 0 0 6px var(--accent-amber);
+}
+
+.perf-indicator .dot.red {
+  background-color: var(--accent-red);
+  box-shadow: 0 0 6px var(--accent-red);
+}
+
+/* Table styles inside About Modal */
+.table-cad {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-family: var(--font-sans);
+}
+
+.table-cad th, .table-cad td {
+  border: 1px solid var(--border-solid);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.table-cad th {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.table-cad tr:nth-child(even) {
+  background: rgba(255,255,255,0.01);
+}
