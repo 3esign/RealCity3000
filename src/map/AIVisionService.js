@@ -52,21 +52,36 @@ export class AIVisionService {
     }
 
     const systemPrompt = `You are a satellite image interpretation system for urban planning.
-Given this satellite image, identify zones and return a structured JSON mapping.
-For coordinates, you can use EITHER coordinate pairs [x, y] OR bounding boxes [minX, minY, maxX, maxY].
-For example, "water": [[5, 5], [10, 10, 15, 15]] means cell (5,5) and a rectangle from (10,10) to (15,15).
+Given this satellite image, identify major features, roads, and land-use zones and return a structured JSON mapping.
+
+CRITICAL INSTRUCTIONS FOR COORDINATES:
+1. All coordinates must be returned on a normalized 100x100 grid where:
+   - [0, 0] is the TOP-LEFT corner of the image.
+   - [100, 100] is the BOTTOM-RIGHT corner of the image.
+2. ZONES (water, residential, commercial, industrial, denseForests, brownfields):
+   - Use bounding boxes [minX, minY, maxX, maxY] to define entire contiguous regions (e.g. [10, 20, 45, 60] defines a rectangle).
+   - Return multiple bounding boxes to cover all occurrences. For example, if there are three separate residential neighborhoods, return three separate [minX, minY, maxX, maxY] arrays in the "residential" list.
+   - Do NOT use individual [x, y] points for large zones.
+3. ROADS:
+   - Define roads as straight-line segments [startX, startY, endX, endY].
+   - For example, a road from the top-middle to the bottom-middle of the image would be [50, 0, 50, 100].
+   - Trace all major streets, highways, and connections as line segments.
+4. VACANT LOTS:
+   - Use single coordinate pairs [x, y] to pinpoint individual vacant lots.
+
 Map features to this JSON format:
 {
-  "water": [],
-  "roads": [],
-  "residential": [],
-  "commercial": [],
-  "industrial": [],
-  "denseForests": [],
-  "brownfields": [],
-  "vacantLots": []
+  "water": [], // List of bounding boxes [minX, minY, maxX, maxY] or points [x, y] representing lakes, rivers, pools
+  "roads": [], // List of line segments [startX, startY, endX, endY] representing streets and highways
+  "residential": [], // List of bounding boxes [minX, minY, maxX, maxY] representing housing blocks
+  "commercial": [], // List of bounding boxes [minX, minY, maxX, maxY] representing retail/office blocks
+  "industrial": [], // List of bounding boxes [minX, minY, maxX, maxY] representing factories/warehouses
+  "denseForests": [], // List of bounding boxes [minX, minY, maxX, maxY] representing parks or thick woods
+  "brownfields": [], // List of bounding boxes [minX, minY, maxX, maxY] representing abandoned industrial/empty dirt areas
+  "vacantLots": [] // List of individual points [x, y] representing empty urban plots
 }
-Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}. Keep classifications logical and realistic based on the visual features.`;
+
+Ensure you classify the entire visible area logically and realistically based on the visual layout of the image. Be generous with coverage—residential, commercial, industrial, forests, water, and roads should cover a substantial portion of the image.`;
 
     try {
       if (provider === 'openrouter') {
@@ -360,80 +375,38 @@ Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}. K
     const commercial = [];
     const industrial = [];
     
-    // Seed water body (river in center-left)
-    for (let y = 0; y < h; y++) {
-      const x = Math.floor(w * 0.15 + Math.sin(y * 0.1) * 3);
+    // Seed water body (river in center-left) in 100x100 space
+    for (let y = 0; y < 100; y++) {
+      const x = Math.floor(15 + Math.sin(y * 0.1) * 3);
       for (let dx = -2; dx <= 2; dx++) {
-        if (x + dx >= 0 && x + dx < w) {
-          water.push([x + dx, y]);
-        }
+        water.push([x + dx, y]);
       }
     }
 
-    // Seed major roads (horizontal & vertical)
-    const midY = Math.floor(h / 2);
-    const midX = Math.floor(w / 2);
-    for (let x = 0; x < w; x++) {
-      roads.push([x, midY]);
-    }
-    for (let y = 0; y < h; y++) {
-      roads.push([midX, y]);
-    }
+    // Seed major roads (horizontal & vertical lines in 100x100 space)
+    roads.push([0, 50, 100, 50]);
+    roads.push([50, 0, 50, 100]);
 
-    // Seed residential blocks
-    const rMinX = Math.floor(w * 0.55);
-    const rMaxX = Math.floor(w * 0.9);
-    const rMinY = Math.floor(h * 0.55);
-    const rMaxY = Math.floor(h * 0.9);
-    residential.push([rMinX, rMinY, rMaxX, rMaxY]);
+    // Seed residential blocks (bounding boxes [minX, minY, maxX, maxY])
+    residential.push([55, 55, 90, 90]);
 
     // Seed commercial around central crossroads
-    commercial.push([midX - 3, midY - 3, midX + 3, midY + 3]);
+    commercial.push([47, 47, 53, 53]);
 
     // Seed industrial near brownfield
-    const iMinX = Math.floor(w * 0.35);
-    const iMaxX = Math.floor(w * 0.48);
-    const iMinY = Math.floor(h * 0.1);
-    const iMaxY = Math.floor(h * 0.35);
-    industrial.push([iMinX, iMinY, iMaxX, iMaxY]);
+    industrial.push([35, 10, 48, 35]);
 
     // Seed dense forests
-    const fx = Math.floor(w * 0.75);
-    const fy = Math.floor(h * 0.25);
-    for (let dy = -4; dy <= 4; dy++) {
-      for (let dx = -4; dx <= 4; dx++) {
-        if (Math.random() < 0.75) {
-          const nx = fx + dx;
-          const ny = fy + dy;
-          if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-            denseForests.push([nx, ny]);
-          }
-        }
-      }
-    }
+    denseForests.push([70, 20, 80, 30]);
 
     // Seed brownfields
-    const bx = Math.floor(w * 0.3);
-    const by = Math.floor(h * 0.65);
-    for (let dy = -2; dy <= 2; dy++) {
-      for (let dx = -2; dx <= 2; dx++) {
-        if (Math.random() < 0.8) {
-          const nx = bx + dx;
-          const ny = by + dy;
-          if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-            brownfields.push([nx, ny]);
-          }
-        }
-      }
-    }
+    brownfields.push([28, 63, 32, 67]);
 
-    // Seed vacant lots
-    for (let i = 0; i < 8; i++) {
-      vacantLots.push([
-        Math.floor(Math.random() * (w - 4)) + 2,
-        Math.floor(Math.random() * (h - 4)) + 2
-      ]);
-    }
+    // Seed vacant lots (points)
+    vacantLots.push([45, 20]);
+    vacantLots.push([20, 45]);
+    vacantLots.push([80, 80]);
+    vacantLots.push([15, 85]);
 
     return { brownfields, vacantLots, denseForests, water, roads, residential, commercial, industrial };
   }

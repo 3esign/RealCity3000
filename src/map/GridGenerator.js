@@ -31,22 +31,53 @@ export class GridGenerator {
     });
 
     // Helper to extract coordinates, supporting both [x, y] and [minX, minY, maxX, maxY]
-    const getSatelliteCoords = (arr) => {
+    // Scales normalized percentage coordinates [0, 100] to the grid size
+    const getSatelliteCoords = (arr, isRoad = false) => {
       if (!arr || !Array.isArray(arr)) return [];
       const coords = [];
+      
+      const scaleX = (val) => Math.min(Math.max(Math.round((val / 100) * (width - 1)), 0), width - 1);
+      const scaleY = (val) => Math.min(Math.max(Math.round((val / 100) * (height - 1)), 0), height - 1);
+
       arr.forEach(item => {
         if (!Array.isArray(item)) return;
         if (item.length === 2) {
-          coords.push({ x: item[0], y: item[1] });
+          coords.push({ x: scaleX(item[0]), y: scaleY(item[1]) });
         } else if (item.length === 4) {
-          const [minX, minY, maxX, maxY] = item;
-          const startX = Math.min(minX, maxX);
-          const endX = Math.max(minX, maxX);
-          const startY = Math.min(minY, maxY);
-          const endY = Math.max(minY, maxY);
-          for (let y = startY; y <= endY; y++) {
-            for (let x = startX; x <= endX; x++) {
-              coords.push({ x, y });
+          const [x0, y0, x1, y1] = item;
+          if (isRoad) {
+            // Draw a line for roads
+            const startX = scaleX(x0);
+            const startY = scaleY(y0);
+            const endX = scaleX(x1);
+            const endY = scaleY(y1);
+            
+            // Bresenham's line algorithm
+            const dx = Math.abs(endX - startX);
+            const dy = Math.abs(endY - startY);
+            const sx = (startX < endX) ? 1 : -1;
+            const sy = (startY < endY) ? 1 : -1;
+            let err = dx - dy;
+            let cx = startX;
+            let cy = startY;
+            
+            while (true) {
+              coords.push({ x: cx, y: cy });
+              if (cx === endX && cy === endY) break;
+              const e2 = 2 * err;
+              if (e2 > -dy) { err -= dy; cx += sx; }
+              if (e2 < dx) { err += dx; cy += sy; }
+            }
+          } else {
+            // Draw a bounding box for zones
+            const startX = scaleX(Math.min(x0, x1));
+            const endX = scaleX(Math.max(x0, x1));
+            const startY = scaleY(Math.min(y0, y1));
+            const endY = scaleY(Math.max(y0, y1));
+            for (let y = startY; y <= endY; y++) {
+              for (let x = startX; x <= endX; x++) {
+                coords.push({ x, y });
+              }
             }
           }
         }
@@ -89,7 +120,7 @@ export class GridGenerator {
         }
       });
 
-      const roadCoords = getSatelliteCoords(satelliteData.roads);
+      const roadCoords = getSatelliteCoords(satelliteData.roads, true);
       roadCoords.forEach(({ x, y }) => {
         if (grid[y] && grid[y][x] && grid[y][x].type !== 'WATER') {
           grid[y][x].type = 'ROAD';
