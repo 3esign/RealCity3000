@@ -71,6 +71,7 @@ CRITICAL INSTRUCTIONS FOR COORDINATES:
 
 Map features to this JSON format:
 {
+  "reasoning": "A concise, step-by-step description of your visual interpretation process. Detail what features, colors, textures, and shapes you see in the satellite imagery (e.g. green vegetated sections, dark blue water bands, gray/orange tiled roofs of residential blocks, grid structures of streets) and how you map them logically to the grid coordinates.",
   "water": [], // List of bounding boxes [minX, minY, maxX, maxY] or points [x, y] representing lakes, rivers, pools
   "roads": [], // List of line segments [startX, startY, endX, endY] representing streets and highways
   "residential": [], // List of bounding boxes [minX, minY, maxX, maxY] representing housing blocks
@@ -408,7 +409,17 @@ Ensure you classify the entire visible area logically and realistically based on
     vacantLots.push([80, 80]);
     vacantLots.push([15, 85]);
 
-    return { brownfields, vacantLots, denseForests, water, roads, residential, commercial, industrial };
+    return {
+      reasoning: "Local mock generator: Seeded river running center-left, main crossroads extending from center [50, 50], residential cluster in bottom-right [55..90], industrial node top-left, and dense forest patch top-right.",
+      brownfields,
+      vacantLots,
+      denseForests,
+      water,
+      roads,
+      residential,
+      commercial,
+      industrial
+    };
   }
 }
 export default AIVisionService;

@@ -189,6 +189,9 @@ function setupPhase1Listeners() {
         visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl, logToLoader);
         if (visionResult) {
           logToLoader('AI Satellite analysis completed successfully.', 'success');
+          if (visionResult.reasoning) {
+            logToLoader(`<strong>[AI Vision Reasoning]</strong>: ${visionResult.reasoning}`, 'warn');
+          }
           if (visionResult.water) logToLoader(`AI detected: ${visionResult.water.length} water bodies/zones.`, 'info');
           if (visionResult.roads) logToLoader(`AI detected: ${visionResult.roads.length} road networks/corridors.`, 'info');
           if (visionResult.residential) logToLoader(`AI detected: ${visionResult.residential.length} residential neighborhoods.`, 'info');
