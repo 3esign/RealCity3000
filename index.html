@@ -191,6 +191,8 @@
           <span class="author-credits" style="font-size: 10px; color: var(--text-secondary); font-family: var(--font-mono); margin-left: 10px; border-left: 1px solid var(--border-glass); padding-left: 10px; opacity: 0.85;">by Union Nikola Tesla University Academic Staff Team</span>
           <div class="toolbar-divider"></div>
           <span class="bbox-readout" id="toolbar-bbox-coords">LAT: 0.000, LNG: 0.000</span>
+          <div class="toolbar-divider"></div>
+          <span id="satellite-vision-status" class="sat-status-badge offline" data-tooltip="Satellite Vision AI integration status"><i class="fa-solid fa-satellite"></i> Vision Offline</span>
         </div>
         
         <div class="toolbar-center">
@@ -414,6 +416,24 @@
             <li><strong>SPACE</strong> to Jump</li>
             <li><strong>ESC</strong> to exit first person view</li>
           </ul>
+        </div>
+        
+        <!-- AI Chatbox Widget -->
+        <div id="ai-chatbox" class="viz-overlay chatbox-panel glass-panel">
+          <div class="chatbox-header">
+            <h4><i class="fa-solid fa-comments"></i> AI Mayor Chat</h4>
+            <button id="toggle-chatbox-btn" class="icon-btn"><i class="fa-solid fa-chevron-down"></i></button>
+          </div>
+          <div id="chatbox-body" class="chatbox-body">
+            <div class="chat-message ai-message">
+              <span class="message-sender">AI Mayor</span>
+              <p>Hello! I am monitoring the simulation. Give me instructions on what you'd like me to prioritize (e.g., 'Focus on industrial zones' or 'Build more parks').</p>
+            </div>
+          </div>
+          <div class="chatbox-input-container">
+            <input type="text" id="chatbox-input" placeholder="Instruct the AI Mayor..." />
+            <button id="chatbox-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+          </div>
         </div>
       </div>
 

@@ -202,7 +202,7 @@ export class GridGenerator {
       const isClosed = w.coords.length > 2 &&
                        w.coords[0].lat === w.coords[w.coords.length - 1].lat &&
                        w.coords[0].lng === w.coords[w.coords.length - 1].lng;
-      const isLine = w.isWaterway || !isClosed;
+      const isLine = !isClosed;
 
       if (isLine) {
         const typeStr = String(w.type).toLowerCase();

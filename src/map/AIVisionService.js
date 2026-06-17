@@ -399,14 +399,6 @@ Ensure you classify the entire visible area logically and realistically based on
     const commercial = [];
     const industrial = [];
     
-    // Seed water body (river in center-left) in 100x100 space
-    for (let y = 0; y < 100; y++) {
-      const x = Math.floor(15 + Math.sin(y * 0.1) * 3);
-      for (let dx = -2; dx <= 2; dx++) {
-        water.push([x + dx, y]);
-      }
-    }
-
     // Seed major roads (horizontal & vertical lines in 100x100 space)
     roads.push([0, 50, 100, 50]);
     roads.push([50, 0, 50, 100]);

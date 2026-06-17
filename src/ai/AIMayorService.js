@@ -6,6 +6,11 @@ export class AIMayorService {
   constructor() {
     this.adapter = new AIProviderAdapter();
     this.isRequestPending = false;
+    this.userInstructions = [];
+  }
+
+  addUserInstruction(text) {
+    this.userInstructions.push(text);
   }
 
   async runMayorTurn() {
@@ -14,10 +19,15 @@ export class AIMayorService {
     const state = store.getState();
     const metrics = state.metrics;
     
+    let instructionsContext = "";
+    if (this.userInstructions.length > 0) {
+      instructionsContext = `\n\nTHE HUMAN MAYOR HAS GIVEN YOU THE FOLLOWING INSTRUCTIONS TO PRIORITIZE:\n- ${this.userInstructions.join('\n- ')}\n\nAcknowledge these instructions and base your parameter adjustments on them.`;
+    }
+
     const systemPrompt = `You are the AI Mayor of RealCity3000, a scientific urban simulation.
 You can adjust parameters relative to their current values to guide city development.
 Current parameters are:
-${JSON.stringify(state.params, null, 2)}
+${JSON.stringify(state.params, null, 2)}${instructionsContext}
 
 Respond with a JSON object containing reasoning and actions (max 3 actions).
 Actions can adjust: "diffusion", "breed", "spread", "roadGravity", "greenProtection", "taxRate", "environmentalReg", "densityCap".
@@ -37,6 +47,9 @@ Format:
 - Pollution Index: ${metrics.pollutionIndex}
 - Demand (R,C,I): Res ${metrics.rciDemand.r}, Com ${metrics.rciDemand.c}, Ind ${metrics.rciDemand.i}`;
 
+    // Clear instructions after sending
+    this.userInstructions = [];
+
     this.isRequestPending = true;
     this.pulseCount = (this.pulseCount || 0) + 1;
     eventBus.emit('ai-thinking-started');
@@ -51,6 +64,10 @@ Format:
       
       if (decision && decision.actions) {
         this.applyDecisions(decision);
+      }
+      
+      if (decision && decision.reasoning) {
+        window.dispatchEvent(new CustomEvent('ai-mayor-response', { detail: { message: decision.reasoning } }));
       }
     } catch (err) {
       console.error('AI Mayor processing failed', err);

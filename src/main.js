@@ -19,12 +19,14 @@ import { FEATURE_LABELS, resolveFeatureConfig } from './ai/providerCapabilities.
 import { getMethodologyHTML } from './ui/AboutModal.js';
 import { PRESET_SCENARIOS } from './simulation/Parameters.js';
 import { initTooltips } from './ui/Tooltip.js';
+import Chatbox from './ui/Chatbox.js';
 
 // Global instances
 let mapSelector;
 let canvas2D;
 let three3D;
 let dashboard;
+let chatbox;
 const overpassService = new OverpassService();
 const gridGenerator = new GridGenerator();
 const aiVisionService = new AIVisionService();
@@ -213,6 +215,7 @@ function initApp() {
   mapSelector = new MapSelector();
   dashboard = new MetricsDashboard();
   dashboard.initChartTooltips();
+  chatbox = new Chatbox(store, aiMayorService);
 
   // 2. Setup Phase 1 UI Listeners
   setupPhase1Listeners();
@@ -362,9 +365,20 @@ function setupPhase1Listeners() {
         }
       } catch (visionErr) {
         logToLoader(`AI Vision processing failed, utilizing standard base layout fallback: ${visionErr.message}`, 'warn');
+        document.getElementById('satellite-vision-status').innerHTML = '<i class="fa-solid fa-satellite"></i> Vision Failed';
+        document.getElementById('satellite-vision-status').className = 'sat-status-badge offline';
+        document.getElementById('satellite-vision-status').style.color = 'var(--danger-red)';
       }
     } else {
       logToLoader('AI Satellite analysis disabled by user settings. Skipping.', 'info');
+      document.getElementById('satellite-vision-status').innerHTML = '<i class="fa-solid fa-satellite"></i> Vision Disabled';
+      document.getElementById('satellite-vision-status').className = 'sat-status-badge offline';
+    }
+
+    if (state.useAIVision && visionResult) {
+      document.getElementById('satellite-vision-status').innerHTML = '<i class="fa-solid fa-satellite"></i> Vision Active';
+      document.getElementById('satellite-vision-status').className = 'sat-status-badge online';
+      document.getElementById('satellite-vision-status').style.color = 'var(--electric-cyan)';
     }
 
     // 4. Grid Generation (Satellite base first, then overlay OSM highways & building footprints)
