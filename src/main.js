@@ -254,42 +254,21 @@ function setupPhase1Listeners() {
     loader.querySelectorAll('.retry-extract-btn, .bypass-ai-btn, .action-buttons-wrapper').forEach(btn => btn.remove());
 
     try {
-      // 1. Fetch OSM Vector Data with automatic retry + exponential backoff
+      // 1. Fetch OSM Vector Data from mirrors
       statusText.textContent = 'Querying OpenStreetMap Overpass API...';
       let parsed = null;
       let rawOsm = null;
       let osmFailed = false;
 
       logToLoader('Querying OpenStreetMap Overpass servers...', 'info');
-      const MAX_RETRIES = 4;
-      const BASE_DELAY_MS = 2000;
-
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          statusText.textContent = attempt === 1
-            ? 'Querying OpenStreetMap Overpass API...'
-            : `Retrying Overpass API (attempt ${attempt}/${MAX_RETRIES})...`;
-          
-          if (attempt > 1) {
-            logToLoader(`Retrying Overpass API (attempt ${attempt}/${MAX_RETRIES})...`, 'warn');
-          }
-          
-          rawOsm = await overpassService.fetchMapData(state.bbox, logToLoader);
-          statusText.textContent = 'Parsing geometries and highways...';
-          logToLoader('OpenStreetMap data fetched successfully. Parsing geometries...', 'success');
-          parsed = overpassService.parseGeometries(rawOsm);
-          break; // Success — exit retry loop
-        } catch (osmErr) {
-          logToLoader(`OSM query attempt ${attempt}/${MAX_RETRIES} failed: ${osmErr.message}`, 'error');
-          if (attempt < MAX_RETRIES) {
-            const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
-            statusText.textContent = `Overpass API busy. Waiting ${(delay / 1000).toFixed(0)}s before retry ${attempt + 1}/${MAX_RETRIES}...`;
-            logToLoader(`Waiting ${(delay / 1000).toFixed(0)}s before retrying...`, 'info');
-            await new Promise(resolve => setTimeout(resolve, delay));
-          } else {
-            osmFailed = true;
-          }
-        }
+      try {
+        rawOsm = await overpassService.fetchMapData(state.bbox, logToLoader);
+        statusText.textContent = 'Parsing geometries and highways...';
+        logToLoader('OpenStreetMap data fetched successfully. Parsing geometries...', 'success');
+        parsed = overpassService.parseGeometries(rawOsm);
+      } catch (osmErr) {
+        logToLoader(`OSM query failed: ${osmErr.message}`, 'error');
+        osmFailed = true;
       }
 
       if (osmFailed) {

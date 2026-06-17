@@ -45,13 +45,13 @@ out geom;`;
       const url = shuffled[i];
       const host = url.split('/')[2];
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per endpoint
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout per endpoint
       
       try {
-        const fetchUrl = `${url}?data=${encodeURIComponent(query)}`;
-        log(`Querying mirror ${i + 1}/${shuffled.length}: ${host} (30s timeout)...`);
-        const response = await fetch(fetchUrl, {
-          method: 'GET',
+        log(`Querying mirror ${i + 1}/${shuffled.length}: ${host} (8s timeout)...`);
+        const response = await fetch(url, {
+          method: 'POST',
+          body: query,
           signal: controller.signal
         });
         
