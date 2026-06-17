@@ -176,14 +176,17 @@ function setupPhase1Listeners() {
         const esriStaticUrl = `https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=${state.bbox.west},${state.bbox.south},${state.bbox.east},${state.bbox.north}&bboxSR=4326&imageSR=4326&size=500,500&format=png&f=image`;
         logToLoader(`Static Satellite URL generated. Length: ${esriStaticUrl.length} chars.`, 'info');
         
+        const provider = state.aiProvider;
         const hasKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.vision;
-        if (hasKey) {
-          logToLoader('Sending image URL to AI Vision Service for landuse analysis...', 'info');
+        if (provider === 'local') {
+          logToLoader('Local Mathematical Engine selected for Vision Service. Running local rules...', 'info');
+        } else if (hasKey) {
+          logToLoader(`Preparing request to AI Vision Service using provider "${provider}"...`, 'info');
         } else {
-          logToLoader('No AI Key provided for Vision Service. Vision analysis will use simulation mock.', 'warn');
+          logToLoader(`No API key provided for Vision Service with provider "${provider}".`, 'warn');
         }
         
-        visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl);
+        visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl, logToLoader);
         if (visionResult) {
           logToLoader('AI Satellite analysis completed successfully.', 'success');
           if (visionResult.water) logToLoader(`AI detected: ${visionResult.water.length} water bodies/zones.`, 'info');
