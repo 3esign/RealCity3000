@@ -165,6 +165,13 @@ input:checked + .slider-toggle:before {
   color: #fff;
 }
 
+.dropdown-content a.disabled {
+  color: var(--text-dim) !important;
+  cursor: not-allowed !important;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
 .dropdown:hover .dropdown-content {
   display: block;
 }

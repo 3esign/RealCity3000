@@ -196,6 +196,14 @@ function setupPhase1Listeners() {
       loader.classList.add('hidden');
     }
   });
+
+  // Start screen Academic Documentation downloads
+  document.getElementById('start-download-report-btn').addEventListener('click', () => {
+    exportService.downloadReport();
+  });
+  document.getElementById('start-download-text-btn').addEventListener('click', () => {
+    exportService.downloadTextReport();
+  });
 }
 
 function setupPhase2Listeners() {
@@ -421,7 +429,13 @@ function setupPhase2Listeners() {
   // Export dropdown triggers
   document.getElementById('export-json-btn').addEventListener('click', () => exportService.downloadJSON());
   document.getElementById('export-csv-btn').addEventListener('click', () => exportService.downloadCSV());
-  document.getElementById('export-sim-report-btn').addEventListener('click', () => exportService.downloadSimulationReport());
+  document.getElementById('export-sim-report-btn').addEventListener('click', (e) => {
+    if (e.currentTarget.classList.contains('disabled')) {
+      e.preventDefault();
+      return;
+    }
+    exportService.downloadSimulationReport();
+  });
   document.getElementById('export-png-btn').addEventListener('click', () => {
     const mode = store.getState().renderingMode;
     if (mode === '2d') {
@@ -439,6 +453,18 @@ function setupPhase2Listeners() {
     const yearStr = String(year).padStart(4, '0');
     const yearEl = document.getElementById('sim-year');
     if (yearEl) yearEl.textContent = `Year ${yearStr}`;
+
+    // Enable/disable simulation report download based on Year 2032 projection completion
+    const simReportBtn = document.getElementById('export-sim-report-btn');
+    if (simReportBtn) {
+      if (year >= 2032) {
+        simReportBtn.classList.remove('disabled');
+        simReportBtn.setAttribute('data-tooltip', 'Download full text simulation run report including geographical metadata, parameters, and historical year-by-year KPI values');
+      } else {
+        simReportBtn.classList.add('disabled');
+        simReportBtn.setAttribute('data-tooltip', `Download full text simulation run report (locked until Year 2032, current: ${year})`);
+      }
+    }
 
     const mode = store.getState().renderingMode;
     if (canvas2D && mode === '2d') canvas2D.draw();

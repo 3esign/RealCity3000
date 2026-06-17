@@ -115,6 +115,15 @@
           </div>
         </div>
 
+        <div class="sidebar-section">
+          <h3 data-tooltip="Academic Documentation: Download Methodology Report and Technical Specifications directly before running the simulation."><i class="fa-solid fa-file-pdf"></i> Academic Documentation</h3>
+          <p class="instructions">Download methodology literature and technical specifications compiled by the University academic team.</p>
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button id="start-download-report-btn" class="btn btn-block" style="flex: 1; font-size: 11px; padding: 8px 4px;" data-tooltip="Download full HTML Methodology Report detailing mathematical equations (SLEUTH, Bid-Rent, ABM)"><i class="fa-solid fa-file-invoice"></i> Methodology (.html)</button>
+            <button id="start-download-text-btn" class="btn btn-block" style="flex: 1; font-size: 11px; padding: 8px 4px;" data-tooltip="Download Markdown Technical Specifications containing equations and code references"><i class="fa-solid fa-file-code"></i> Tech Specs (.md)</button>
+          </div>
+        </div>
+
         <div class="sidebar-footer">
           <button id="extract-data-btn" class="btn btn-primary btn-block disabled" data-tooltip="Extract OpenStreetMap vector geometries and initialize cellular simulation sandbox">
             <i class="fa-solid fa-file-import"></i> Extract & Initialize Sandbox
@@ -153,7 +162,7 @@
               <a href="#" id="export-json-btn" data-tooltip="Export current grid matrix and cellular parameters as a JSON file"><i class="fa-solid fa-file-code"></i> Save State (.json)</a>
               <a href="#" id="export-csv-btn" data-tooltip="Export historical KPI metrics series as a CSV table"><i class="fa-solid fa-file-csv"></i> Metrics History (.csv)</a>
               <a href="#" id="export-png-btn" data-tooltip="Download current 2D blueprint map visualization as a PNG image"><i class="fa-solid fa-file-image"></i> Capture Canvas (.png)</a>
-              <a href="#" id="export-sim-report-btn" data-tooltip="Download full text simulation run report including geographical metadata, parameters, and historical year-by-year KPI values"><i class="fa-solid fa-file-invoice"></i> Simulation Report (.txt)</a>
+              <a href="#" id="export-sim-report-btn" class="disabled" data-tooltip="Download full text simulation run report (locked until Year 2032)"><i class="fa-solid fa-file-invoice"></i> Simulation Report (.txt)</a>
             </div>
           </div>
           <button id="return-map-btn" class="btn btn-danger" data-tooltip="Return to the region selector page to define a new bounding box"><i class="fa-solid fa-arrow-rotate-left"></i> Re-Select Area</button>
