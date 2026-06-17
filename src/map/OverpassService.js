@@ -28,29 +28,45 @@ out geom;`;
 
     const body = `data=${encodeURIComponent(query)}`;
     
-    try {
-      const response = await fetch(this.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
-        },
-        body: body
-      });
-      
-      if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('Overpass API rate limited. Please try again in a moment.');
+    const endpoints = [
+      'https://overpass-api.de/api/interpreter',
+      'https://lz4.overpass-api.de/api/interpreter',
+      'https://z.overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+      'https://overpass.nchc.org.tw/api/interpreter'
+    ];
+
+    let lastError = null;
+    for (const url of endpoints) {
+      try {
+        console.log(`Attempting to fetch OSM data from: ${url}`);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+          },
+          body: body
+        });
+        
+        if (!response.ok) {
+          console.warn(`Endpoint ${url} responded with status: ${response.status}`);
+          lastError = new Error(`Overpass API ${url} responded with HTTP ${response.status}`);
+          continue;
         }
-        throw new Error(`Overpass API responded with HTTP ${response.status}`);
+        
+        const data = await response.json();
+        if (data && (data.elements || data.remark)) {
+          console.log(`Successfully fetched OSM data from: ${url}`);
+          return data;
+        }
+      } catch (err) {
+        console.warn(`Failed fetching from endpoint ${url}:`, err);
+        lastError = err;
       }
-      
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      console.error('Failed fetching data from Overpass API', err);
-      throw err;
     }
+    
+    throw lastError || new Error('All Overpass API endpoints failed. Please try again in a moment.');
   }
 
   // Parses elements into clean geometries for RealCity3000

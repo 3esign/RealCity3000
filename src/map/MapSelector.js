@@ -114,11 +114,7 @@ export class MapSelector {
       
       try {
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
-        const res = await fetch(url, {
-          headers: {
-            'User-Agent': 'RealCity3000-GIS-Sandbox-App'
-          }
-        });
+        const res = await fetch(url);
         const data = await res.json();
         
         if (data && data.length > 0) {
