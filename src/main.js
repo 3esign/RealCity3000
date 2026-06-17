@@ -14,6 +14,7 @@ import Canvas2DRenderer from './viz/Canvas2DRenderer.js';
 import ThreeJSRenderer from './viz/ThreeJSRenderer.js';
 import MetricsDashboard from './viz/MetricsDashboard.js';
 import ExportService from './export/ExportService.js';
+import ValidationService from './export/ValidationService.js';
 import { getMethodologyHTML } from './ui/AboutModal.js';
 import { PRESET_SCENARIOS } from './simulation/Parameters.js';
 import { initTooltips } from './ui/Tooltip.js';
@@ -30,6 +31,7 @@ const simulationEngine = new SimulationEngine();
 const aiMayorService = new AIMayorService();
 const historicalService = new HistoricalResearchService();
 const exportService = new ExportService();
+const validationService = new ValidationService();
 
 let simInterval = null;
 
@@ -397,6 +399,8 @@ function setupPhase2Listeners() {
       const layer = btn.getAttribute('data-layer');
       store.updateState({ forceFieldLayer: layer });
       
+      updateLegendUI(layer);
+      
       if (store.getState().renderingMode === '2d') {
         canvas2D.draw();
       }
@@ -492,6 +496,171 @@ function setupPhase2Listeners() {
     document.getElementById('ai-mayor-status').style.color = 'var(--accent)';
     document.getElementById('ai-thought-content').textContent = store.getState().aiMayorThoughts;
   });
+
+  // Historical Validation trigger
+  const runValidationBtn = document.getElementById('btn-run-validation');
+  if (runValidationBtn) {
+    runValidationBtn.addEventListener('click', () => {
+      const state = store.getState();
+      if (!state.grid || !state.originalGrid) {
+        alert("Please load an area first to run validation.");
+        return;
+      }
+      
+      runValidationBtn.disabled = true;
+      runValidationBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validating...';
+      
+      setTimeout(() => {
+        try {
+          const { localGrid } = validationService.runValidationSimulation(state.grid, state.params);
+          const metrics = validationService.calculateMetrics(localGrid, state.originalGrid);
+          
+          document.getElementById('metric-validation-f1').textContent = metrics.f1.toFixed(3);
+          document.getElementById('metric-validation-error').textContent = `${metrics.meanSpatialError.toFixed(1)}m`;
+          document.getElementById('metric-validation-precision').textContent = metrics.precision.toFixed(3);
+          document.getElementById('metric-validation-recall').textContent = metrics.recall.toFixed(3);
+        } catch (err) {
+          console.error("Validation failed:", err);
+          alert(`Validation failed: ${err.message}`);
+        } finally {
+          runValidationBtn.disabled = false;
+          runValidationBtn.innerHTML = '<i class="fa-solid fa-play"></i> Validate';
+        }
+      }, 50);
+    });
+  }
+
+  // Auto Calibration Simulated Annealing trigger
+  const autoCalibrateBtn = document.getElementById('btn-auto-calibrate');
+  const calibrationProgressContainer = document.getElementById('calibration-progress-container');
+  const calibrationProgressPct = document.getElementById('calibration-progress-pct');
+  const calibrationProgressBar = document.getElementById('calibration-progress-bar');
+  
+  if (autoCalibrateBtn) {
+    autoCalibrateBtn.addEventListener('click', () => {
+      const state = store.getState();
+      if (!state.grid || !state.originalGrid) {
+        alert("Please load an area first to run calibration.");
+        return;
+      }
+      
+      autoCalibrateBtn.disabled = true;
+      if (runValidationBtn) runValidationBtn.disabled = true;
+      if (calibrationProgressContainer) calibrationProgressContainer.classList.remove('hidden');
+      
+      validationService.runSimulatedAnnealing(
+        state.grid,
+        state.originalGrid,
+        (progress, bestP, bestF1) => {
+          if (calibrationProgressBar) calibrationProgressBar.style.width = `${progress}%`;
+          if (calibrationProgressPct) calibrationProgressPct.textContent = `${Math.round(progress)}%`;
+          document.getElementById('metric-validation-f1').textContent = bestF1.toFixed(3);
+        },
+        (bestParams, bestF1) => {
+          const newParams = { ...state.params, ...bestParams };
+          store.updateState({ params: newParams });
+          
+          syncParametersToSliders();
+          
+          const finalResult = validationService.runValidationSimulation(state.grid, newParams);
+          const finalMetrics = validationService.calculateMetrics(finalResult.localGrid, state.originalGrid);
+          
+          document.getElementById('metric-validation-f1').textContent = finalMetrics.f1.toFixed(3);
+          document.getElementById('metric-validation-error').textContent = `${finalMetrics.meanSpatialError.toFixed(1)}m`;
+          document.getElementById('metric-validation-precision').textContent = finalMetrics.precision.toFixed(3);
+          document.getElementById('metric-validation-recall').textContent = finalMetrics.recall.toFixed(3);
+          
+          autoCalibrateBtn.disabled = false;
+          if (runValidationBtn) runValidationBtn.disabled = false;
+          
+          setTimeout(() => {
+            if (calibrationProgressContainer) calibrationProgressContainer.classList.add('hidden');
+            if (calibrationProgressBar) calibrationProgressBar.style.width = '0%';
+            if (calibrationProgressPct) calibrationProgressPct.textContent = '0%';
+          }, 1500);
+          
+          alert(`Calibration complete! Best F1-Score: ${bestF1.toFixed(3)} found with Diffusion: ${bestParams.diffusion}, Spread: ${bestParams.spread}, Road Gravity: ${bestParams.roadGravity}. Sliders updated.`);
+        }
+      );
+    });
+  }
+}
+
+function updateLegendUI(layer) {
+  const container = document.getElementById('legend-overlay-container');
+  if (!container) return;
+  
+  if (layer === 'none') {
+    container.innerHTML = `
+      <h4>Land Classification</h4>
+      <div class="legend-items">
+        <div class="legend-item"><span class="color-box" style="background:#2a2d35;"></span> Vacant</div>
+        <div class="legend-item"><span class="color-box" style="background:#d4a574;"></span> Res (Low)</div>
+        <div class="legend-item"><span class="color-box" style="background:#e87040;"></span> Res (High)</div>
+        <div class="legend-item"><span class="color-box" style="background:#00d4ff;"></span> Commercial</div>
+        <div class="legend-item"><span class="color-box" style="background:#8b5cf6;"></span> Industrial</div>
+        <div class="legend-item"><span class="color-box" style="background:#22c55e;"></span> Park</div>
+        <div class="legend-item"><span class="color-box" style="background:#059669;"></span> Forest</div>
+        <div class="legend-item"><span class="color-box" style="background:#0ea5e9;"></span> Water</div>
+        <div class="legend-item"><span class="color-box" style="background:#94a3b8;"></span> Highway</div>
+        <div class="legend-item"><span class="color-box" style="background:#b45309;"></span> Brownfield</div>
+        <div class="legend-item"><span class="color-box" style="background:#eab308;"></span> Agricultural</div>
+        <div class="legend-item"><span class="color-box" style="background:#f43f5e;"></span> Institutional</div>
+      </div>
+    `;
+  } else if (layer === 'accessibility') {
+    container.innerHTML = `
+      <h4>Accessibility Field</h4>
+      <div class="legend-items">
+        <div class="legend-item" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+          <div style="height: 12px; width: 100%; background: linear-gradient(to right, rgba(0, 240, 255, 0), rgba(0, 240, 255, 0.7)); border: 1px solid var(--border-solid); border-radius: 2px;"></div>
+          <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--text-secondary);">
+            <span>Low Access</span>
+            <span>High Access</span>
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (layer === 'value') {
+    container.innerHTML = `
+      <h4>Land Value Field</h4>
+      <div class="legend-items">
+        <div class="legend-item" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+          <div style="height: 12px; width: 100%; background: linear-gradient(to right, rgba(234, 179, 8, 0), rgba(234, 179, 8, 0.8)); border: 1px solid var(--border-solid); border-radius: 2px;"></div>
+          <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--text-secondary);">
+            <span>Low Rent</span>
+            <span>Premium Rent</span>
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (layer === 'pollution') {
+    container.innerHTML = `
+      <h4>Pollution Footprint</h4>
+      <div class="legend-items">
+        <div class="legend-item" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+          <div style="height: 12px; width: 100%; background: linear-gradient(to right, rgba(168, 85, 247, 0), rgba(168, 85, 247, 0.7)); border: 1px solid var(--border-solid); border-radius: 2px;"></div>
+          <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--text-secondary);">
+            <span>Clean Air</span>
+            <span>Toxic Footprint</span>
+          </div>
+        </div>
+      </div>
+    `;
+  } else if (layer === 'pressure') {
+    container.innerHTML = `
+      <h4>Growth Pressure</h4>
+      <div class="legend-items">
+        <div class="legend-item" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+          <div style="height: 12px; width: 100%; background: linear-gradient(to right, rgba(239, 68, 68, 0), rgba(239, 68, 68, 0.8)); border: 1px solid var(--border-solid); border-radius: 2px;"></div>
+          <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--text-secondary);">
+            <span>No Demand</span>
+            <span>High Demand</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 }
 
 function syncParametersToSliders() {

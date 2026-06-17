@@ -88,13 +88,13 @@ export class SystemsDynamics {
     const housingGap = jobCapacity - totalPopulation;
     
     // Residential demand: grows if jobs outnumber housing capacity, decreases with taxes
-    let rDelta = (housingGap * 0.05) - (params.taxRate - 15) * 0.8 + params.populationGrowth * 1.5;
+    let rDelta = (housingGap * 0.015) - (params.taxRate - 15) * 0.4 + params.populationGrowth * 1.2 + params.economicGrowth * 0.6;
     
     // Commercial demand: grows with population size and economic growth parameters
-    let cDelta = (totalPopulation * 0.02 - totalC) * 0.5 + params.economicGrowth * 1.0;
+    let cDelta = (totalPopulation * 0.015 - totalC) * 0.3 + params.economicGrowth * 1.2;
     
     // Industrial demand: grows with raw economic demand, penalized by environmental regulations
-    let iDelta = (totalC * 0.8 - totalI) * 0.6 - (params.environmentalReg - 30) * 0.5;
+    let iDelta = (totalC * 0.6 - totalI) * 0.3 - (params.environmentalReg - 30) * 0.4 + params.economicGrowth * 0.8;
 
     // Smart Control: Cyclical economic waves (sine/cosine waves over time to keep city dynamic)
     const cycleTime = store.getState().simulationYear;

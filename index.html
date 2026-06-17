@@ -159,6 +159,13 @@
           <div class="dropdown">
             <button id="export-dropdown-btn" class="btn" data-tooltip="Export current simulation grid, historical metrics table, screenshot canvas, or simulation report"><i class="fa-solid fa-download"></i> Export <i class="fa-solid fa-caret-down"></i></button>
             <div class="dropdown-content">
+              <div style="padding: 8px 12px; border-bottom: 1px solid var(--border-glass); display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 8px; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono);">MC Uncertainty Mode</span>
+                <select id="export-mc-samples" style="font-size: 10px; padding: 4px; background: var(--bg-tertiary); border: 1px solid var(--border-solid); color: #fff; border-radius: 4px; outline: none; cursor: pointer;">
+                  <option value="50">Quick (50 runs)</option>
+                  <option value="500">Scientific (500 runs)</option>
+                </select>
+              </div>
               <a href="#" id="export-json-btn" data-tooltip="Export current grid matrix and cellular parameters as a JSON file"><i class="fa-solid fa-file-code"></i> Save State (.json)</a>
               <a href="#" id="export-csv-btn" data-tooltip="Export historical KPI metrics series as a CSV table"><i class="fa-solid fa-file-csv"></i> Metrics History (.csv)</a>
               <a href="#" id="export-png-btn" data-tooltip="Download current 2D blueprint map visualization as a PNG image"><i class="fa-solid fa-file-image"></i> Capture Canvas (.png)</a>
@@ -262,6 +269,47 @@
             <p id="ai-thought-content">Waiting for simulation step...</p>
           </div>
         </div>
+
+        <!-- Scientific Validation & Calibration -->
+        <div class="sim-panel validation-panel">
+          <h3 data-tooltip="Historical Validation & Calibration: Seed from 2017, simulate to 2026, and calculate precision accuracy against reality."><i class="fa-solid fa-square-poll-vertical"></i> Validation & Calibration</h3>
+          <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 10px;">Compare simulated growth to actual OSM data or optimize parameters using Simulated Annealing.</p>
+          
+          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+            <button id="btn-run-validation" class="btn btn-block" style="flex: 1; font-size: 11px; padding: 6px;" data-tooltip="Run validation test and compute spatial match metrics"><i class="fa-solid fa-play"></i> Validate</button>
+            <button id="btn-auto-calibrate" class="btn btn-block" style="flex: 1; font-size: 11px; padding: 6px;" data-tooltip="Run Simulated Annealing auto-tuning loop on sliders"><i class="fa-solid fa-wand-magic-sparkles"></i> Calibrate</button>
+          </div>
+
+          <!-- Calibration Progress Bar (hidden by default) -->
+          <div id="calibration-progress-container" class="hidden" style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--text-secondary); margin-bottom: 2px;">
+              <span>Calibrating...</span>
+              <span id="calibration-progress-pct">0%</span>
+            </div>
+            <div style="height: 4px; background: var(--border-solid); border-radius: 2px; overflow: hidden;">
+              <div id="calibration-progress-bar" style="height: 100%; width: 0%; background: var(--accent); transition: width 0.1s;"></div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: var(--font-mono); font-size: 11px; background: var(--bg-tertiary); padding: 8px; border-radius: 4px; border: 1px solid var(--border-solid);">
+            <div style="display: flex; flex-direction: column;">
+              <span style="color: var(--text-secondary); font-size: 9px;">F1 MATCH</span>
+              <span id="metric-validation-f1" style="color: var(--accent); font-weight: bold;">--</span>
+            </div>
+            <div style="display: flex; flex-direction: column;">
+              <span style="color: var(--text-secondary); font-size: 9px;">MEAN ERROR</span>
+              <span id="metric-validation-error" style="color: var(--accent-amber);">--</span>
+            </div>
+            <div style="display: flex; flex-direction: column; margin-top: 4px;">
+              <span style="color: var(--text-secondary); font-size: 9px;">PRECISION</span>
+              <span id="metric-validation-precision">--</span>
+            </div>
+            <div style="display: flex; flex-direction: column; margin-top: 4px;">
+              <span style="color: var(--text-secondary); font-size: 9px;">RECALL</span>
+              <span id="metric-validation-recall">--</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Main Visualizer Panel (Canvas & WebGL) -->
@@ -272,7 +320,7 @@
         <div id="canvas-3d-container" class="viz-layer hidden"></div>
         
         <!-- Legend Overlay -->
-        <div class="viz-overlay legend-panel glass-panel">
+        <div class="viz-overlay legend-panel glass-panel" id="legend-overlay-container">
           <h4>Land Classification</h4>
           <div class="legend-items">
             <div class="legend-item"><span class="color-box" style="background:#2a2d35;"></span> Vacant</div>

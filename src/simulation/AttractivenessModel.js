@@ -66,7 +66,7 @@ export class AttractivenessModel {
         }
         cell.accessibility = minRoadDist === 999 ? 0.0 : Math.max(0, 1.0 - (minRoadDist / 10.0));
 
-        // Pollution (Industrial inverse-square falloff)
+        // Pollution (Industrial inverse-square falloff with temporal momentum and green dissipation)
         let localPollution = 0.0;
         industries.forEach(ind => {
           const d = Math.sqrt((x - ind.x)**2 + (y - ind.y)**2);
@@ -77,10 +77,7 @@ export class AttractivenessModel {
           }
         });
         
-        // Add macro-environmental modifier
-        cell.pollution = Math.min(localPollution, 1.0);
-
-        // Green Access (proximity to parks/forests)
+        // Calculate green access first to use in dissipation
         let greenAccess = 0.0;
         let minGreenDist = 999;
         const greenSearchRadius = 12;
@@ -94,9 +91,20 @@ export class AttractivenessModel {
         }
         cell.greenAccess = minGreenDist === 999 ? 0.0 : Math.max(0, 1.0 - (minGreenDist / 12.0));
 
-        // Alonso's Bid-Rent Theory (decay from commercial city center)
-        const centerDist = Math.sqrt((x - centerX)**2 + (y - centerY)**2);
-        const rentDecay = Math.exp(-0.04 * centerDist); // lambda = 0.04
+        const prevPollution = cell.pollution || 0.0;
+        const blendedPollution = prevPollution * 0.4 + localPollution * 0.6;
+        cell.pollution = Math.max(0.0, Math.min(1.0, blendedPollution * 0.95 - (cell.greenAccess * 0.1) - 0.01));
+
+
+        // Alonso's Bid-Rent Theory (decay from nearest commercial center)
+        let minComDist = 999;
+        for (let i = 0; i < commercialCenters.length; i++) {
+          const com = commercialCenters[i];
+          const d = Math.sqrt((x - com.x)**2 + (y - com.y)**2);
+          if (d < minComDist) minComDist = d;
+        }
+        const centerDist = minComDist === 999 ? Math.sqrt((x - centerX)**2 + (y - centerY)**2) : minComDist;
+        const rentDecay = Math.exp(-0.015 * centerDist); // gentler decay constant
 
         // Land Value calculation formula
         // V = V_base * Access^0.6 * Green^0.3 * (1 - Pollution^0.4)

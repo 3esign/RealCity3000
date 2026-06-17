@@ -12,6 +12,9 @@ export function getMethodologyHTML() {
 
       <h3>1. Cellular Automata & Urban Sprawl (SLEUTH-inspired)</h3>
       <p>
+        <em>Academic Citation: Clarke, K. C., Hoppen, S., & Gaydos, L. (1997). "A self-modifying cellular automaton model of historical land use change..."</em>
+      </p>
+      <p>
         Growth is modeled through four sequential Monte Carlo growth rules executing every simulated year. 
         To achieve realistic dynamics, all rules are regulated by the global <strong>Carrying Capacity</strong> 
         \\( (1 - D_{urban}) \\) and the macro <strong>RCI Demand Factor</strong> \\( F_{demand} \\):
@@ -33,22 +36,28 @@ export function getMethodologyHTML() {
 
       <h3>2. Bid-Rent Desirability Fields (Alonso Theory)</h3>
       <p>
+        <em>Academic Citation: Alonso, W. (1964). "Location and Land Use: Toward a General Theory of Land Rent."</em>
+      </p>
+      <p>
         The land value of each cell represents its location desirability. We model this following <strong>Alonso's Bid-Rent theory</strong>, 
-        stipulating that land rent values decay exponentially with distance from commercial hubs (city centers):
+        stipulating that land rent values decay exponentially with distance from commercial hubs:
       </p>
       <div class="math-eq">
-        \\[ V(x,y) = V_{\\text{base}} \\times \\text{Accessibility}^{0.6} \\times \\text{GreenAccess}^{0.3} \\times (1 - \\text{Pollution}^{0.6}) \\times e^{-\\lambda d} \\]
+        \\[ V(x,y) = V_{\\text{base}} \\times \\text{Accessibility}^{0.6} \\times \\text{GreenAccess}^{0.3} \\times (1 - \\text{Pollution}^{0.6}) \\times e^{-\\lambda D_{com}} \\]
       </div>
       <p>
         Where:
         <ul>
-          <li>\\( d \\) is the distance from the commercial center centroid.</li>
-          <li>\\( \\lambda = 0.04 \\) is the rent decay constant.</li>
+          <li>\\( D_{com} \\) is the Euclidean distance from the cell to the <strong>nearest commercial center cell</strong>, creating realistic polycentric urban peaks.</li>
+          <li>\\( \\lambda = 0.015 \\) is the gentled rent decay constant (providing realistic propagation across grids).</li>
           <li>\\( \\text{Pollution} \\) scales as inverse-square falloff from industrial centers.</li>
         </ul>
       </p>
 
       <h3>3. Agent-Based Utility Functions (ABM Layer)</h3>
+      <p>
+        <em>Academic Citation: Ligmann-Zielinska, A., & Jankowski, P. (2007). "Agent-based modelling of spatial decision-making..."</em>
+      </p>
       <p>
         In addition to CA cellular changes, autonomous developers seek local optimization based on utility functions:
       </p>
@@ -81,13 +90,16 @@ export function getMethodologyHTML() {
 
       <h3>4. Macro Feedback Loops (Systems Dynamics)</h3>
       <p>
+        <em>Academic Citation: Forrester, J. W. (1969). "Urban Dynamics."</em>
+      </p>
+      <p>
         RCI (Residential, Commercial, Industrial) demand balances dynamically following stocks and flows, 
         modulated by congestion penalties, tax rate thresholds, and environmental regulation caps:
       </p>
       <div class="math-eq">
         \\[ \\text{Jobs} = (5 \\times C) + (8 \\times I) + (4 \\times \\text{Inst}) \\]
-        \\[ \\Delta_R = (\\text{Jobs} - \\text{Population}) \\cdot 0.05 - (\\text{TaxRate} - 15) \\cdot 0.8 - P_{congestion} - P_{tax} \\]
-        \\[ \\text{Demand}_R = \\text{clamp}(\\text{Demand}_R + \\Delta_R, 0, 100) \\]
+        \\[ \\Delta_R = (\\text{Jobs} - \\text{Population}) \\cdot 0.015 - (\\text{TaxRate} - 15) \\cdot 0.4 + (\\text{PopGrowth} \\cdot 1.2) + (\\text{EconGrowth} \\cdot 0.6) \\]
+        \\[ \\text{Demand}_R = \\text{clamp}(\\text{Demand}_R + \\Delta_R - P_{congestion} - P_{tax}, 0, 100) \\]
       </div>
       <p>
         Where global congestion penalty \\( P_{congestion} = 6.0 \\times D_{urban} \\), and high tax penalties (>20%) act as direct downward pressure.
@@ -98,27 +110,30 @@ export function getMethodologyHTML() {
         RealCity3000 implements a <strong>Dual-Source Spatial Visual Processing</strong> relation, resolving urban boundaries through two cross-validating sources:
       </p>
       <ul>
-        <li><strong>Cadastral Vector Stream (OSM Outlines)</strong>: Extracts explicit architectural vector footprints (polygons and polylines) for buildings, highways, and water bodies, establishing ground-truth CAD geometric boundaries.</li>
-        <li><strong>Spectral Optical Stream (Vision AI Satellite Parse)</strong>: Inspects static satellite maps to discover environmental land-use anomalies, such as industrial brownfields, vacant construction lots, or dense tree clusters that lack formal cadastral vector tagging.</li>
+        <li><strong>Cadastral Vector Stream (OSM Outlines)</strong>: Extracts explicit architectural vector footprints (polygons and polylines) for buildings, highways, and water bodies.
+          <br><em>Confidence: 100% (Direct cadastral geometry import)</em>
+        </li>
+        <li><strong>Spectral Optical Stream (Vision AI Satellite Parse)</strong>: Inspects satellite maps to discover environmental land-use anomalies, such as industrial brownfields, vacant construction lots, or dense tree clusters.
+          <br><em>Confidence: 82% (Internal model classification metric, not externally validated)</em>
+        </li>
       </ul>
+
+      <h3>6. Visual Layer Force Fields: Spatial Parameter Mapping</h3>
       <p>
-        <strong>Positional Relations:</strong> The vector data acts as a geometric structural mask. The visual optical parser operates within the unmapped structural voids (vacant spaces), injecting semantic classifications (e.g., converting a vacant CAD sector adjacent to highways into a brownfield zone with depressed land rent, or designating an unmapped canopy zone as protected forestry).
-      </p>
-      <h3>6. High-Performance CAD Visualization & Parametric Facades</h3>
-      <p>
-        The 3D WebGL engine in RealCity3000 connects parameter values directly to visual attributes and uses custom geometries:
+        These overlay layers represent the core spatial variables driving agent choices and cellular automata growth rules:
       </p>
       <ul>
-        <li><strong>GPU Instanced Mesh Architecture</strong>: To maintain 60fps performance over large grids, we utilize static <code>THREE.InstancedMesh</code> buffers. Vacant or demolished cells scale their size down to <code>0.0001</code> and reside underground, reducing draw calls to exactly 2.</li>
-        <li><strong>Parametric Facade Face Subdivision</strong>: Instead of solid boxes, buildings are generated using a custom parametric geometry. We subdivide base box buffers and calculate coordinates to prune specific triangles representing window panes. This dynamically builds structured columns and floor slabs.</li>
-        <li><strong>Live Parameter Manifestation</strong>: Visual parameters respond directly to UI sliders in real-time:
-          <ul>
-            <li><em>Environmental Regulations</em>: Dynamically drives fog color and thickness, morphing from clean blue sky (high regulations) to dense, dirty brownish smog (low regulations).</li>
-            <li><em>Tax Rate</em>: Direct controller of skyscraper emissive lights (low tax rates drive bright, optimistic cyan window glow; high tax rates dim the windows to a dark, vacant blue).</li>
-            <li><em>Green Protection</em>: Directly scales the height and green color saturation of procedural tree meshes.</li>
-            <li><em>Density Cap</em>: Determines the maximum heights and face subdivisions of residential/commercial buildings.</li>
-          </ul>
-        </li>
+        <li><strong>Accessibility Field (Cyan)</strong>: Visualizes proximity to highway infrastructure. High accessibility directly raises the residential, commercial, and industrial developer utility calculations.</li>
+        <li><strong>Land Value Field (Gold)</strong>: Visualizes the bid-rent rent-gradient decay from business centers. High land values attract high-density residential developments but penalize heavy industry.</li>
+        <li><strong>Pollution Field (Purple)</strong>: Visualizes industrial smoke accumulation. High pollution triggers local residential decay/abandonment.</li>
+        <li><strong>Growth Pressure Field (Red)</strong>: Visualizes the combined developer attraction index before CA stochastic sweeps are run.</li>
+      </ul>
+
+      <h3>7. Resolution, Validation & Optimization Metrics</h3>
+      <ul>
+        <li><strong>Spatial Resolution</strong>: Each cell represents a <strong>10m &times; 10m</strong> area. A default 150 &times; 150 grid models exactly <strong>2.25 km²</strong>.</li>
+        <li><strong>Historical Validation Mode</strong>: Clones the initial grid, clears building footprints, simulates 2017 &rarr; 2026, and matches against OSM to output Precision, Recall, F1-Score, and Mean Spatial Error (meters).</li>
+        <li><strong>Simulated Annealing Optimizer</strong>: Automatically adjusts Diffusion, Spread, and Road Gravity sliders using a Boltzmann cooling loop to maximize validation F1-scores.</li>
       </ul>
 
       <hr style="border: 0; border-top: 1px solid var(--border-solid); margin: 16px 0;" />
