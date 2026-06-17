@@ -30,7 +30,8 @@ async function fetchMirror(endpoint, query, timeoutMs) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': userAgent
+        'User-Agent': userAgent,
+        'Accept': 'application/json'
       },
       body: `data=${encodeURIComponent(query)}`,
       signal: controller.signal
@@ -77,26 +78,27 @@ export default async function handler(req, res) {
     return;
   }
 
-  const endpoints = [
-    'https://overpass-api.de/api/interpreter',
-    'https://osm.hpi.de/overpass/api/interpreter',
-    'https://overpass.private.coffee/api/interpreter'
+  // Use only the 2 most reliable mirrors to allow larger timeout budgets
+  // Total maximum execution time: 5000 + 4000 = 9000ms (fits under Vercel 10s limit)
+  const mirrors = [
+    { url: 'https://overpass-api.de/api/interpreter', timeout: 5000 },
+    { url: 'https://overpass.private.coffee/api/interpreter', timeout: 4000 }
   ];
 
   const errors = [];
   
   // Try each mirror sequentially
-  for (const endpoint of endpoints) {
+  for (const mirror of mirrors) {
     try {
       const start = Date.now();
-      const data = await fetchMirror(endpoint, query, 2500); // 2.5s strict timeout per mirror
-      console.log(`[api/overpass] ${endpoint} succeeded in ${Date.now() - start}ms`);
+      const data = await fetchMirror(mirror.url, query, mirror.timeout);
+      console.log(`[api/overpass] ${mirror.url} succeeded in ${Date.now() - start}ms`);
       res.status(200).json(data);
       return;
     } catch (err) {
-      const reason = err.name === 'AbortError' ? 'Timeout (2500ms)' : err.message;
-      console.warn(`[api/overpass] ${endpoint} failed: ${reason}`);
-      errors.push(`${endpoint.split('/')[2]}: ${reason}`);
+      const reason = err.name === 'AbortError' ? `Timeout (${mirror.timeout}ms)` : err.message;
+      console.warn(`[api/overpass] ${mirror.url} failed: ${reason}`);
+      errors.push(`${mirror.url.split('/')[2]}: ${reason}`);
     }
   }
 

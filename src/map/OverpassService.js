@@ -15,9 +15,9 @@ export class OverpassService {
   async executeSequentially(query, log) {
     const includeProxy = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.PROD : true;
 
+    // Use only the 2 most reliable mirrors for frontend fallback
     const mirrors = [
       'https://overpass-api.de/api/interpreter',
-      'https://osm.hpi.de/overpass/api/interpreter',
       'https://overpass.private.coffee/api/interpreter'
     ];
 
@@ -39,17 +39,20 @@ export class OverpassService {
       const target = targets[i];
       const host = target.kind === 'proxy' ? 'Local Proxy' : target.url.split('/')[2];
       const controller = new AbortController();
-      // Increase proxy timeout to 8.5s since it handles all 3 mirrors itself in max 7.5s
-      const timeoutMs = target.kind === 'proxy' ? 8500 : 5000;
+      // Proxy handles 2 mirrors (max 9s). Give proxy 9.5s timeout. Mirrors get 5s.
+      const timeoutMs = target.kind === 'proxy' ? 9500 : 5000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
         let response;
         if (target.kind === 'proxy') {
-          log(`Querying Backup Proxy: ${host} via POST (8.5s timeout)...`);
+          log(`Querying Backup Proxy: ${host} via POST (9.5s timeout)...`);
           response = await fetch(target.url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
             body: JSON.stringify({ query }),
             signal: controller.signal
           });
@@ -58,6 +61,9 @@ export class OverpassService {
           const getUrl = `${target.url}?data=${encodeURIComponent(query)}`;
           response = await fetch(getUrl, {
             method: 'GET',
+            headers: {
+              'Accept': 'application/json'
+            },
             signal: controller.signal
           });
         }
@@ -91,7 +97,7 @@ export class OverpassService {
       } catch (err) {
         clearTimeout(timeoutId);
         const reason = err.name === 'AbortError' ? 'Timeout exceeded' : err.message;
-        log(`${target.kind === 'proxy' ? 'Proxy' : 'Mirror'} ${host} failed: ${reason}`, 'warn');
+        log(`Proxy/Mirror ${host} failed: ${reason}`, 'warn');
         lastError = err;
       }
     }
@@ -170,6 +176,10 @@ out geom;`;
       } catch (err) {
         log(`Roads fetch failed: ${err.message}`, 'error');
       }
+
+      // Add delay to prevent rate limit 429/406 on the second query
+      log('Delaying 1000ms to prevent rate limiting before next query...', 'info');
+      await new Promise(r => setTimeout(r, 1000));
 
       log('Executing simplified Query 2/2: Buildings & Water...', 'info');
       let buildingsData = null;
