@@ -119,18 +119,50 @@ function setupPhase1Listeners() {
     const loader = document.getElementById('simulation-loading');
     const statusText = document.getElementById('loading-status-text');
     loader.classList.remove('hidden');
+
+    // Remove any previous retry button
+    const existingRetryBtn = loader.querySelector('.retry-extract-btn');
+    if (existingRetryBtn) existingRetryBtn.remove();
+
     try {
-      // 1. Fetch OSM Vector Data
+      // 1. Fetch OSM Vector Data with automatic retry + exponential backoff
       statusText.textContent = 'Querying OpenStreetMap Overpass API...';
       let parsed;
       let rawOsm = null;
-      try {
-        rawOsm = await overpassService.fetchMapData(state.bbox);
-        statusText.textContent = 'Parsing geometries and highways...';
-        parsed = overpassService.parseGeometries(rawOsm);
-      } catch (osmErr) {
-        console.error('OSM query failed or timed out:', osmErr);
-        throw new Error('OpenStreetMap Overpass API is currently overloaded or timed out. Please try to extract the region again.');
+      const MAX_RETRIES = 4;
+      const BASE_DELAY_MS = 2000;
+
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          statusText.textContent = attempt === 1
+            ? 'Querying OpenStreetMap Overpass API...'
+            : `Retrying Overpass API (attempt ${attempt}/${MAX_RETRIES})...`;
+          rawOsm = await overpassService.fetchMapData(state.bbox);
+          statusText.textContent = 'Parsing geometries and highways...';
+          parsed = overpassService.parseGeometries(rawOsm);
+          break; // Success — exit retry loop
+        } catch (osmErr) {
+          console.warn(`OSM attempt ${attempt}/${MAX_RETRIES} failed:`, osmErr.message);
+          if (attempt < MAX_RETRIES) {
+            const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+            statusText.textContent = `Overpass API busy. Waiting ${(delay / 1000).toFixed(0)}s before retry ${attempt + 1}/${MAX_RETRIES}...`;
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            // All retries exhausted — show retry button instead of alert
+            statusText.textContent = 'OpenStreetMap Overpass API is currently overloaded. Click below to try again.';
+            const retryBtn = document.createElement('button');
+            retryBtn.className = 'btn btn-accent retry-extract-btn';
+            retryBtn.style.cssText = 'margin-top: 16px; padding: 10px 24px; font-size: 14px; cursor: pointer;';
+            retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry Extraction';
+            retryBtn.addEventListener('click', () => {
+              retryBtn.remove();
+              extractBtn.click();
+            });
+            loader.querySelector('.loading-content, .loader-container, div')?.appendChild(retryBtn)
+              || loader.appendChild(retryBtn);
+            return; // Exit — loader stays visible with retry button
+          }
+        }
       }
 
       // 2. Fetch Historical Research timeline context asynchronously
@@ -141,6 +173,7 @@ function setupPhase1Listeners() {
 
       // 3. Run Satellite Spectrum Analysis first to establish the base landuse grid
       statusText.textContent = 'Analyzing satellite spectrum for natural and brownfield layouts...';
+      let visionResult = null;
       try {
         const esriStaticUrl = `https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=${state.bbox.west},${state.bbox.south},${state.bbox.east},${state.bbox.north}&bboxSR=4326&imageSR=4326&size=500,500&format=png&f=image`;
         visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl);
@@ -158,7 +191,7 @@ function setupPhase1Listeners() {
         visionResult
       );
 
-      // 4. Update Store
+      // 5. Update Store
       store.updateState({
         grid: grid,
         originalGrid: grid.map(row => row.map(c => ({ ...c }))),
@@ -182,7 +215,7 @@ function setupPhase1Listeners() {
       document.getElementById('view-sandbox').classList.remove('hidden');
       document.getElementById('view-sandbox').classList.add('active');
 
-      // 5. Initialize visualizers
+      // 6. Initialize visualizers
       canvas2D = new Canvas2DRenderer('canvas-2d');
       three3D = new ThreeJSRenderer('canvas-3d-container');
       
@@ -199,9 +232,24 @@ function setupPhase1Listeners() {
       document.getElementById('toolbar-bbox-coords').textContent = `LAT: ${midLat}, LNG: ${midLng} // AREA: ${(state.gridWidth * state.gridHeight).toLocaleString()} cells`;
 
     } catch (err) {
-      alert(`Initialization failed: ${err.message}. Check network connections.`);
+      console.error('Initialization error:', err);
+      statusText.textContent = `Error: ${err.message}`;
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'btn btn-accent retry-extract-btn';
+      retryBtn.style.cssText = 'margin-top: 16px; padding: 10px 24px; font-size: 14px; cursor: pointer;';
+      retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry Extraction';
+      retryBtn.addEventListener('click', () => {
+        retryBtn.remove();
+        extractBtn.click();
+      });
+      loader.querySelector('.loading-content, .loader-container, div')?.appendChild(retryBtn)
+        || loader.appendChild(retryBtn);
+      return; // Keep loader visible with error + retry
     } finally {
-      loader.classList.add('hidden');
+      // Only hide loader if no retry button is present
+      if (!loader.querySelector('.retry-extract-btn')) {
+        loader.classList.add('hidden');
+      }
     }
   });
 

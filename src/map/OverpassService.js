@@ -30,36 +30,54 @@ out geom;`;
       'https://overpass.nchc.org.tw/api/interpreter'
     ];
 
+    // Shuffle endpoint order so we don't always hammer the same first server
+    const shuffled = [...endpoints].sort(() => Math.random() - 0.5);
+
     let lastError = null;
-    for (const url of endpoints) {
+    for (let i = 0; i < shuffled.length; i++) {
+      const url = shuffled[i];
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout per endpoint
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per endpoint
       
       try {
-        console.log(`Attempting to fetch OSM data from: ${url}`);
-        const fetchUrl = `${url}?data=${encodeURIComponent(query)}`;
-        const response = await fetch(fetchUrl, {
-          method: 'GET',
+        console.log(`[OverpassService] Attempting endpoint ${i + 1}/${shuffled.length}: ${url}`);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body,
           signal: controller.signal
         });
         
         clearTimeout(timeoutId);
         
+        if (response.status === 429 || response.status === 504) {
+          console.warn(`[OverpassService] Endpoint ${url} rate-limited or gateway timeout (${response.status}). Trying next.`);
+          lastError = new Error(`Overpass API ${url} responded with HTTP ${response.status}`);
+          // Small breathing gap before next endpoint
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        
         if (!response.ok) {
-          console.warn(`Endpoint ${url} responded with status: ${response.status}`);
+          console.warn(`[OverpassService] Endpoint ${url} responded with status: ${response.status}`);
           lastError = new Error(`Overpass API ${url} responded with HTTP ${response.status}`);
           continue;
         }
         
         const data = await response.json();
         if (data && (data.elements || data.remark)) {
-          console.log(`Successfully fetched OSM data from: ${url}`);
+          console.log(`[OverpassService] Successfully fetched OSM data from: ${url} (${data.elements?.length || 0} elements)`);
           return data;
         }
       } catch (err) {
         clearTimeout(timeoutId);
-        console.warn(`Failed fetching from endpoint ${url}:`, err);
+        const reason = err.name === 'AbortError' ? 'timeout (30s)' : err.message;
+        console.warn(`[OverpassService] Failed endpoint ${url}: ${reason}`);
         lastError = err;
+        // Breathing gap before next attempt
+        if (i < shuffled.length - 1) {
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
     }
     
