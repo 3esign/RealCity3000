@@ -141,9 +141,9 @@ function setupPhase1Listeners() {
 
       // 3. Run Satellite Spectrum Analysis first to establish the base landuse grid
       statusText.textContent = 'Analyzing satellite spectrum for natural and brownfield layouts...';
-      let visionResult = null;
       try {
-        visionResult = await aiVisionService.analyzeSatelliteImage(null);
+        const esriStaticUrl = `https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=${state.bbox.west},${state.bbox.south},${state.bbox.east},${state.bbox.north}&bboxSR=4326&imageSR=4326&size=500,500&format=png&f=image`;
+        visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl);
       } catch (visionErr) {
         console.warn('AI Vision processing failed, utilizing standard base layout.', visionErr);
       }

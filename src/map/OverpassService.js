@@ -37,13 +37,9 @@ out geom;`;
       
       try {
         console.log(`Attempting to fetch OSM data from: ${url}`);
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'application/json'
-          },
-          body: body,
+        const fetchUrl = `${url}?data=${encodeURIComponent(query)}`;
+        const response = await fetch(fetchUrl, {
+          method: 'GET',
           signal: controller.signal
         });
         

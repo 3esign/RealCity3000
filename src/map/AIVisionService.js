@@ -3,7 +3,13 @@ import store from '../state/store.js';
 export class AIVisionService {
   constructor() {}
 
-  async analyzeSatelliteImage(canvasImageBase64) {
+  cleanJSON(text) {
+    if (!text) return '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    return jsonMatch ? jsonMatch[0] : text;
+  }
+
+  async analyzeSatelliteImage(imageUrl) {
     const state = store.getState();
     const apiKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.vision;
     const provider = state.aiProvider;
@@ -23,7 +29,35 @@ Given this satellite image, identify zones and return a structured JSON mapping:
 Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}.`;
 
     try {
-      if (provider === 'openai') {
+      if (provider === 'openrouter') {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Analyze this satellite image tile for brownfields and vacant lots.' },
+                  { type: 'image_url', image_url: { url: imageUrl } }
+                ]
+              }
+            ],
+            response_format: { type: 'json_object' }
+          })
+        });
+
+        const data = await response.json();
+        if (data.choices && data.choices[0]) {
+          const cleanedText = this.cleanJSON(data.choices[0].message.content);
+          return JSON.parse(cleanedText);
+        }
+      } else if (provider === 'openai') {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -38,7 +72,7 @@ Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}.`;
                 role: 'user',
                 content: [
                   { type: 'text', text: 'Analyze this satellite image tile for brownfields and vacant lots.' },
-                  { type: 'image_url', image_url: { url: canvasImageBase64 } }
+                  { type: 'image_url', image_url: { url: imageUrl } }
                 ]
               }
             ],
@@ -48,49 +82,13 @@ Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}.`;
 
         const data = await response.json();
         if (data.choices && data.choices[0]) {
-          return JSON.parse(data.choices[0].message.content);
+          const cleanedText = this.cleanJSON(data.choices[0].message.content);
+          return JSON.parse(cleanedText);
         }
       } else if (provider === 'anthropic') {
-        // Claude 3.5 Sonnet payload format
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 1024,
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'image',
-                    source: {
-                      type: 'base64',
-                      media_type: 'image/jpeg',
-                      data: canvasImageBase64.split(',')[1] // extract raw base64
-                    }
-                  },
-                  {
-                    type: 'text',
-                    text: systemPrompt + '\nReturn ONLY raw JSON.'
-                  }
-                ]
-              }
-            ]
-          })
-        });
-
-        const data = await response.json();
-        if (data.content && data.content[0]) {
-          // Parse JSON from text response
-          const text = data.content[0].text;
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          if (jsonMatch) return JSON.parse(jsonMatch[0]);
-        }
+        // Claude 3.5 Sonnet payload format (fallback to mock since base64 conversion is local-only)
+        console.log('Anthropic vision requires base64 payload, using simulation mock.');
+        return this.generateMockAIResponse(state.gridWidth, state.gridHeight);
       }
 
       // Default mock fallback for test compatibility
