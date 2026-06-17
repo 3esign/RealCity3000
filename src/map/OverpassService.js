@@ -39,14 +39,14 @@ export class OverpassService {
       const target = targets[i];
       const host = target.kind === 'proxy' ? 'Local Proxy' : target.url.split('/')[2];
       const controller = new AbortController();
-      // Proxy handles 2 mirrors (max 9s). Give proxy 9.5s timeout. Mirrors get 5s.
-      const timeoutMs = target.kind === 'proxy' ? 9500 : 5000;
+      // Proxy handles 2 mirrors (max 30s). Give proxy 35s timeout. Mirrors get 15s.
+      const timeoutMs = target.kind === 'proxy' ? 35000 : 15000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
         let response;
         if (target.kind === 'proxy') {
-          log(`Querying Backup Proxy: ${host} via POST (9.5s timeout)...`);
+          log(`Querying Backup Proxy: ${host} via POST (35s timeout)...`);
           response = await fetch(target.url, {
             method: 'POST',
             headers: { 
@@ -57,7 +57,7 @@ export class OverpassService {
             signal: controller.signal
           });
         } else {
-          log(`Querying mirror ${i}/${mirrors.length}: ${host} via GET (5s timeout)...`);
+          log(`Querying mirror ${i}/${mirrors.length}: ${host} via GET (15s timeout)...`);
           const getUrl = `${target.url}?data=${encodeURIComponent(query)}`;
           response = await fetch(getUrl, {
             method: 'GET',
@@ -411,7 +411,8 @@ out geom;`;
         { lat: riverY + 0.0004, lng: east },
         { lat: riverY - 0.0004, lng: east }
       ],
-      type: 'water'
+      type: 'water',
+      isPolygon: true
     });
 
     // Populate buildings in blocks (skip where they intersect the river)
@@ -466,7 +467,8 @@ out geom;`;
           lng: centerLng + Math.cos(angle) * wSize
         };
       }),
-      type: 'water'
+      type: 'water',
+      isPolygon: true
     });
 
     // Circular ring roads
@@ -560,7 +562,8 @@ out geom;`;
     water.push({
       id: 'procedural_organic_river',
       coords: waterCoords,
-      type: 'water'
+      type: 'water',
+      isPolygon: true
     });
 
     // Curvy main road crossing the river

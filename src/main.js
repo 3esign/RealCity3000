@@ -554,8 +554,7 @@ function setupPhase1Listeners() {
         btnWrapper.appendChild(bypassBtn);
         btnWrapper.appendChild(cancelBtn);
         
-        loader.querySelector('.loading-content, .loader-container, div')?.appendChild(btnWrapper)
-          || loader.appendChild(btnWrapper);
+        loader.appendChild(btnWrapper);
         return; // Exit click handler - loader remains visible with buttons
       }
 
