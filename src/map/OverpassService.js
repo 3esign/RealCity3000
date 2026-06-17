@@ -3,72 +3,50 @@ export class OverpassService {
     this.endpoint = 'https://overpass-api.de/api/interpreter';
   }
 
-  async fetchMapData(bbox, logFn = null) {
-    const log = (msg, type = 'info') => {
-      console.log(`[OverpassService] ${msg}`);
-      if (logFn) logFn(msg, type);
-    };
-
+  // Estimates BBox area in square kilometers
+  estimateBBoxArea(bbox) {
     const { south, west, north, east } = bbox;
-    log(`BBox bounds: S:${south.toFixed(4)}, W:${west.toFixed(4)}, N:${north.toFixed(4)}, E:${east.toFixed(4)}`);
-    
-    // Check localStorage cache first
-    const cacheKey = `osm_cache_${south.toFixed(5)}_${west.toFixed(5)}_${north.toFixed(5)}_${east.toFixed(5)}`;
-    try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        log('Using cached OSM spatial data from previous successful extraction.', 'success');
-        return JSON.parse(cached);
-      }
-    } catch (e) {
-      console.warn('Failed to read from localStorage:', e);
-    }
+    const latDist = (north - south) * 111.32;
+    const avgLatRad = ((south + north) / 2) * Math.PI / 180;
+    const lngDist = (east - west) * 111.32 * Math.cos(avgLatRad);
+    return Math.abs(latDist * lngDist);
+  }
 
-    // Construct Overpass QL query
-    const query = `[out:json][timeout:30];
-(
-  way["building"](${south},${west},${north},${east});
-  way["highway"](${south},${west},${north},${east});
-  way["natural"="water"](${south},${west},${north},${east});
-  way["waterway"](${south},${west},${north},${east});
-  way["landuse"](${south},${west},${north},${east});
-);
-out geom;`;
-
-    const endpoints = [
-      'https://overpass-api.de/api/interpreter',
-      'https://lz4.overpass-api.de/api/interpreter',
-      'https://z.overpass-api.de/api/interpreter',
-      'https://overpass.openstreetmap.ru/api/interpreter'
-    ];
-
-    const shuffled = [...endpoints].sort(() => Math.random() - 0.5);
+  async executeSequentially(query, log) {
     const includeProxy = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.PROD : true;
-    
-    const allTargets = [
-      ...(includeProxy ? [{ url: '/api/overpass', kind: 'proxy' }] : []),
-      ...shuffled.map(url => ({ url, kind: 'mirror' }))
+
+    const mirrors = [
+      'https://overpass-api.de/api/interpreter',
+      'https://osm.hpi.de/overpass/api/interpreter',
+      'https://overpass.private.coffee/api/interpreter'
     ];
+
+    const targets = [];
+    if (includeProxy) {
+      targets.push({ url: '/api/overpass', kind: 'proxy' });
+    }
+    mirrors.forEach(url => {
+      targets.push({ url, kind: 'mirror' });
+    });
 
     if (!includeProxy) {
-      log('Development mode detected. Local proxy fallback is disabled; direct mirrors will be used.', 'warn');
+      log('Development mode detected. Local proxy disabled; direct mirrors will be used sequentially.', 'warn');
     }
 
-    log(`Endpoints priority order: ${allTargets.map(target => target.kind === 'proxy' ? 'Local Proxy' : target.url.split('/')[2]).join(', ')}`);
+    let lastError = null;
 
-    const controllers = allTargets.map(() => new AbortController());
-    let resolved = false;
-
-    const attempts = allTargets.map(async (target, index) => {
-      const controller = controllers[index];
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
       const host = target.kind === 'proxy' ? 'Local Proxy' : target.url.split('/')[2];
-      const timeoutMs = target.kind === 'proxy' ? 10000 : 8000;
+      const controller = new AbortController();
+      // Increase proxy timeout to 8.5s since it handles all 3 mirrors itself in max 7.5s
+      const timeoutMs = target.kind === 'proxy' ? 8500 : 5000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
         let response;
         if (target.kind === 'proxy') {
-          log(`Querying Backup Proxy: ${host} (10s timeout)...`);
+          log(`Querying Backup Proxy: ${host} via POST (8.5s timeout)...`);
           response = await fetch(target.url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -76,7 +54,7 @@ out geom;`;
             signal: controller.signal
           });
         } else {
-          log(`Querying mirror ${index + 1}/${shuffled.length}: ${host} via GET (8s timeout)...`);
+          log(`Querying mirror ${i}/${mirrors.length}: ${host} via GET (5s timeout)...`);
           const getUrl = `${target.url}?data=${encodeURIComponent(query)}`;
           response = await fetch(getUrl, {
             method: 'GET',
@@ -88,51 +66,136 @@ out geom;`;
 
         if (!response.ok) {
           const status = response.status;
-          if (target.kind === 'mirror' && (status === 429 || status === 504)) {
-            log(`Mirror ${host} rate-limited/timeout (${status}).`, 'warn');
-          } else {
-            log(`${target.kind === 'proxy' ? 'Backup Proxy' : 'Mirror'} ${host} returned error code ${status}.`, 'warn');
+          let details = '';
+          if (target.kind === 'proxy') {
+            try {
+              const errJson = await response.json();
+              details = errJson.details || errJson.error || '';
+            } catch (e) {}
           }
-          throw new Error(`${host} returned HTTP ${status}`);
+          const errorMsg = details ? `${host} returned HTTP ${status} (Details: ${details})` : `${host} returned HTTP ${status}`;
+          throw new Error(errorMsg);
         }
 
         const data = await response.json();
         if (!data || (!data.elements && !data.remark)) {
-          throw new Error(`${host} returned an empty Overpass response`);
+          throw new Error(`${host} returned an invalid Overpass payload`);
         }
 
         if (data.remark && typeof data.remark === 'string' && data.remark.includes('runtime error')) {
-          log(`${target.kind === 'proxy' ? 'Backup Proxy' : 'Mirror'} ${host} returned runtime error: ${data.remark}`, 'warn');
           throw new Error(`Mirror runtime error: ${data.remark}`);
         }
 
         log(`Success! Fetched ${data.elements?.length || 0} features from ${host}`, 'success');
-        try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch (e) {}
-
-        if (!resolved) {
-          resolved = true;
-          controllers.forEach((ctrl, ctrlIndex) => {
-            if (ctrlIndex !== index) ctrl.abort();
-          });
-        }
-
         return data;
       } catch (err) {
         clearTimeout(timeoutId);
-        if (!resolved || err.name !== 'AbortError') {
-          const reason = err.name === 'AbortError' ? 'Timeout exceeded' : err.message;
-          log(`${target.kind === 'proxy' ? 'Proxy' : 'Mirror'} ${host} failed: ${reason}`, 'error');
-        }
-        throw err;
+        const reason = err.name === 'AbortError' ? 'Timeout exceeded' : err.message;
+        log(`${target.kind === 'proxy' ? 'Proxy' : 'Mirror'} ${host} failed: ${reason}`, 'warn');
+        lastError = err;
       }
-    });
-
-    try {
-      return await Promise.any(attempts);
-    } catch (aggregateErr) {
-      const finalError = aggregateErr?.errors?.[aggregateErr.errors.length - 1];
-      throw finalError || new Error('All Overpass mirrors and Backup Proxy endpoints failed. Please check your internet connection or try again later.');
     }
+
+    throw lastError || new Error('All Overpass mirrors and Backup Proxy endpoints failed.');
+  }
+
+  async fetchMapData(bbox, logFn = null) {
+    const log = (msg, type = 'info') => {
+      console.log(`[OverpassService] ${msg}`);
+      if (logFn) logFn(msg, type);
+    };
+
+    const area = this.estimateBBoxArea(bbox);
+    log(`BBox Area: ${area.toFixed(2)} km²`);
+    if (area > 4.0) {
+      throw new Error(`Requested extraction area is too large (${area.toFixed(2)} km²). Maximum allowed size is 4.0 km². Please draw a smaller bounding box.`);
+    }
+
+    const { south, west, north, east } = bbox;
+    log(`BBox bounds: S:${south.toFixed(4)}, W:${west.toFixed(4)}, N:${north.toFixed(4)}, E:${east.toFixed(4)}`);
+    
+    // Stable Cache Key (Round to 4 decimal places ~11 meters resolution)
+    const sC = parseFloat(south.toFixed(4));
+    const wC = parseFloat(west.toFixed(4));
+    const nC = parseFloat(north.toFixed(4));
+    const eC = parseFloat(east.toFixed(4));
+    const cacheKey = `osm_cache_v2_${sC}_${wC}_${nC}_${eC}`;
+    
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        log('Using cached OSM spatial data from previous successful extraction.', 'success');
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.warn('Failed to read from localStorage:', e);
+    }
+
+    const queryCombined = `[out:json][timeout:30];
+(
+  way["building"](${south},${west},${north},${east});
+  way["highway"](${south},${west},${north},${east});
+  way["natural"="water"](${south},${west},${north},${east});
+  way["waterway"](${south},${west},${north},${east});
+  way["landuse"](${south},${west},${north},${east});
+);
+out geom;`;
+
+    let data;
+    try {
+      log('Attempting full OSM combined feature extraction...', 'info');
+      data = await this.executeSequentially(queryCombined, log);
+    } catch (combinedErr) {
+      log(`Combined query failed: ${combinedErr.message}. Attempting automated query simplification fallback...`, 'warn');
+      
+      const queryRoads = `[out:json][timeout:15];
+(
+  way["highway"](${south},${west},${north},${east});
+);
+out geom;`;
+
+      const queryBuildings = `[out:json][timeout:20];
+(
+  way["building"](${south},${west},${north},${east});
+  way["natural"="water"](${south},${west},${north},${east});
+  way["waterway"](${south},${west},${north},${east});
+  way["landuse"](${south},${west},${north},${east});
+);
+out geom;`;
+
+      log('Executing simplified Query 1/2: Roads...', 'info');
+      let roadsData = null;
+      try {
+        roadsData = await this.executeSequentially(queryRoads, log);
+      } catch (err) {
+        log(`Roads fetch failed: ${err.message}`, 'error');
+      }
+
+      log('Executing simplified Query 2/2: Buildings & Water...', 'info');
+      let buildingsData = null;
+      try {
+        buildingsData = await this.executeSequentially(queryBuildings, log);
+      } catch (err) {
+        log(`Buildings & Water fetch failed: ${err.message}`, 'error');
+      }
+
+      if (!roadsData && !buildingsData) {
+        throw new Error('All simplified queries also failed. Overpass API is completely unavailable.');
+      }
+
+      const mergedElements = [];
+      if (roadsData?.elements) mergedElements.push(...roadsData.elements);
+      if (buildingsData?.elements) mergedElements.push(...buildingsData.elements);
+
+      data = {
+        elements: mergedElements,
+        remark: (roadsData?.remark || '') + ' ' + (buildingsData?.remark || '')
+      };
+      log(`Simplified recovery completed! Combined total of ${mergedElements.length} elements fetched.`, 'success');
+    }
+
+    try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch (e) {}
+    return data;
   }
 
   inferBuildingUse(tags = {}) {

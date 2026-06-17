@@ -19,26 +19,30 @@ async function readQueryFromRequest(req) {
   return '';
 }
 
-async function fetchMirror(endpoint, query, controller) {
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
+async function fetchMirror(endpoint, query, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const userAgent = 'RealCity3000/1.0 (https://realcity3000.vercel.app; treed@example.com)';
 
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': userAgent
       },
       body: `data=${encodeURIComponent(query)}`,
       signal: controller.signal
     });
 
     if (!response.ok) {
-      throw new Error(`Endpoint ${endpoint} returned status ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
 
     const data = await response.json();
     if (!data || (!data.elements && !data.remark)) {
-      throw new Error(`Endpoint ${endpoint} returned an invalid Overpass payload`);
+      throw new Error('Invalid JSON payload');
     }
 
     return data;
@@ -75,39 +79,30 @@ export default async function handler(req, res) {
 
   const endpoints = [
     'https://overpass-api.de/api/interpreter',
-    'https://lz4.overpass-api.de/api/interpreter',
-    'https://z.overpass-api.de/api/interpreter',
-    'https://overpass.openstreetmap.ru/api/interpreter'
-  ].sort(() => Math.random() - 0.5);
+    'https://osm.hpi.de/overpass/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter'
+  ];
 
-  const controllers = endpoints.map(() => new AbortController());
-  let resolved = false;
-
-  const attempts = endpoints.map(async (endpoint, index) => {
+  const errors = [];
+  
+  // Try each mirror sequentially
+  for (const endpoint of endpoints) {
     try {
-      const data = await fetchMirror(endpoint, query, controllers[index]);
-      if (!resolved) {
-        resolved = true;
-        controllers.forEach((controller, controllerIndex) => {
-          if (controllerIndex !== index) controller.abort();
-        });
-      }
-      return data;
+      const start = Date.now();
+      const data = await fetchMirror(endpoint, query, 2500); // 2.5s strict timeout per mirror
+      console.log(`[api/overpass] ${endpoint} succeeded in ${Date.now() - start}ms`);
+      res.status(200).json(data);
+      return;
     } catch (err) {
-      if (!resolved || err.name !== 'AbortError') {
-        console.warn(`[api/overpass] ${endpoint} failed: ${err.message}`);
-      }
-      throw err;
+      const reason = err.name === 'AbortError' ? 'Timeout (2500ms)' : err.message;
+      console.warn(`[api/overpass] ${endpoint} failed: ${reason}`);
+      errors.push(`${endpoint.split('/')[2]}: ${reason}`);
     }
-  });
-
-  try {
-    const data = await Promise.any(attempts);
-    res.status(200).json(data);
-  } catch (aggregateErr) {
-    res.status(502).json({
-      error: 'All Overpass mirrors failed in serverless function proxy',
-      details: aggregateErr?.errors?.[aggregateErr.errors.length - 1]?.message || 'Unknown error'
-    });
   }
+
+  // All mirrors failed
+  res.status(502).json({
+    error: 'All Overpass mirrors failed in serverless function proxy',
+    details: errors.join(', ')
+  });
 }
