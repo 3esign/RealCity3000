@@ -39,7 +39,7 @@ out geom;`;
     let lastError = null;
     for (const url of endpoints) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 second timeout per endpoint
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout per endpoint
       
       try {
         console.log(`Attempting to fetch OSM data from: ${url}`);
