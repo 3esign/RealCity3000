@@ -285,7 +285,7 @@ export class GridGenerator {
           
           // Connect to previous step to form path matrix
           const prevPt = i > 0 ? road.coords[i-1] : null;
-          if (prevPt) {
+          if (prevPt && y >= 0 && y < height && x >= 0 && x < width) {
             const px = projectLng(prevPt.lng);
             const py = projectLat(prevPt.lat);
             const dx = x - px;

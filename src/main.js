@@ -602,8 +602,7 @@ function setupPhase1Listeners() {
       btnWrapper.appendChild(retryBtn);
       btnWrapper.appendChild(cancelBtn);
 
-      loader.querySelector('.loading-content, .loader-container, div')?.appendChild(btnWrapper)
-        || loader.appendChild(btnWrapper);
+      loader.appendChild(btnWrapper);
       return; // Keep loader visible with error + action buttons
     } finally {
       // Only hide loader if no action buttons are present
