@@ -120,10 +120,16 @@ function setupPhase1Listeners() {
     try {
       // 1. Fetch OSM Vector Data
       statusText.textContent = 'Querying OpenStreetMap Overpass API...';
-      const rawOsm = await overpassService.fetchMapData(state.bbox);
-      
-      statusText.textContent = 'Parsing geometries and highways...';
-      const parsed = overpassService.parseGeometries(rawOsm);
+      let parsed;
+      try {
+        const rawOsm = await overpassService.fetchMapData(state.bbox);
+        statusText.textContent = 'Parsing geometries and highways...';
+        parsed = overpassService.parseGeometries(rawOsm);
+      } catch (osmErr) {
+        console.warn('OSM query failed or timed out. Falling back to procedural layout.', osmErr);
+        parsed = overpassService.generateProceduralElements(state.bbox);
+        alert('Notice: Overpass API connection timed out or is rate-limited. Seeding the sandbox grid with a procedurally generated road network and buildings instead.');
+      }
 
       // 2. Fetch Historical Research timeline context asynchronously
       statusText.textContent = 'Fetching historical context...';

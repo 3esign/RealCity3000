@@ -38,6 +38,9 @@ out geom;`;
 
     let lastError = null;
     for (const url of endpoints) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 second timeout per endpoint
+      
       try {
         console.log(`Attempting to fetch OSM data from: ${url}`);
         const response = await fetch(url, {
@@ -46,8 +49,11 @@ out geom;`;
             'Content-Type': 'application/x-www-form-urlencoded',
             'Accept': 'application/json'
           },
-          body: body
+          body: body,
+          signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
           console.warn(`Endpoint ${url} responded with status: ${response.status}`);
@@ -61,6 +67,7 @@ out geom;`;
           return data;
         }
       } catch (err) {
+        clearTimeout(timeoutId);
         console.warn(`Failed fetching from endpoint ${url}:`, err);
         lastError = err;
       }
@@ -111,6 +118,85 @@ out geom;`;
           type: tags.natural || tags.waterway || tags.landuse
         });
       }
+    });
+
+    return { buildings, roads, water };
+  }
+
+  generateProceduralElements(bbox) {
+    const { south, west, north, east } = bbox;
+    const buildings = [];
+    const roads = [];
+    const water = [];
+
+    // Define coordinate bounds
+    const latStep = (north - south) / 6;
+    const lngStep = (east - west) / 6;
+
+    // Generate procedural grid of streets and avenues
+    for (let i = 1; i < 6; i++) {
+      const rLat = south + i * latStep;
+      roads.push({
+        id: `procedural_road_h_${i}`,
+        coords: [
+          { lat: rLat, lng: west },
+          { lat: rLat, lng: east }
+        ],
+        type: 'primary',
+        lanes: 2,
+        name: `Street ${i}`
+      });
+
+      const rLng = west + i * lngStep;
+      roads.push({
+        id: `procedural_road_v_${i}`,
+        coords: [
+          { lat: south, lng: rLng },
+          { lat: north, lng: rLng }
+        ],
+        type: 'primary',
+        lanes: 2,
+        name: `Avenue ${i}`
+      });
+    }
+
+    // Populate block geometries with mock buildings
+    let bId = 0;
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 5; c++) {
+        const bLat = south + r * latStep + latStep / 2;
+        const bLng = west + c * lngStep + lngStep / 2;
+        const offset = 0.0006;
+        
+        buildings.push({
+          id: `procedural_b_${bId++}`,
+          coords: [
+            { lat: bLat - offset, lng: bLng - offset },
+            { lat: bLat - offset, lng: bLng + offset },
+            { lat: bLat + offset, lng: bLng + offset },
+            { lat: bLat + offset, lng: bLng - offset }
+          ],
+          type: 'yes',
+          levels: Math.floor(Math.random() * 6) + 1,
+          height: null,
+          use: 'residential'
+        });
+      }
+    }
+
+    // Add central water body / canal
+    const centerLat = (south + north) / 2;
+    const centerLng = (east + west) / 2;
+    const wSize = 0.001;
+    water.push({
+      id: 'procedural_water',
+      coords: [
+        { lat: centerLat - wSize, lng: centerLng - wSize },
+        { lat: centerLat - wSize, lng: centerLng + wSize },
+        { lat: centerLat + wSize, lng: centerLng + wSize },
+        { lat: centerLat + wSize, lng: centerLng - wSize }
+      ],
+      type: 'water'
     });
 
     return { buildings, roads, water };
