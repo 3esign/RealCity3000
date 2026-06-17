@@ -330,7 +330,8 @@ out geom;`;
         water.push({
           id: element.id,
           coords: coords,
-          type: tags.natural || tags.waterway || tags.landuse
+          type: tags.natural || tags.waterway || tags.landuse,
+          isWaterway: !!tags.waterway
         });
       }
     });

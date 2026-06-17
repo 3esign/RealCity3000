@@ -92,6 +92,15 @@ Ensure you classify the entire visible area logically and realistically based on
 
     let elapsedTimer;
     try {
+      log(`Converting satellite image to Base64...`, 'info');
+      const imgRes = await fetch(imageUrl);
+      const blob = await imgRes.blob();
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+
       let elapsed = 0;
       elapsedTimer = setInterval(() => {
         elapsed += 2;
@@ -114,7 +123,7 @@ Ensure you classify the entire visible area logically and realistically based on
                 role: 'user',
                 content: [
                   { type: 'text', text: 'Analyze this satellite image tile for brownfields and vacant lots.' },
-                  { type: 'image_url', image_url: { url: imageUrl } }
+                  { type: 'image_url', image_url: { url: dataUrl } }
                 ]
               }
             ],
@@ -164,7 +173,7 @@ Ensure you classify the entire visible area logically and realistically based on
                 role: 'user',
                 content: [
                   { type: 'text', text: 'Analyze this satellite image tile for brownfields and vacant lots.' },
-                  { type: 'image_url', image_url: { url: imageUrl } }
+                  { type: 'image_url', image_url: { url: dataUrl } }
                 ]
               }
             ],
@@ -199,8 +208,7 @@ Ensure you classify the entire visible area logically and realistically based on
           throw new Error('Empty or invalid choices array in OpenAI response');
         }
       } else if (provider === 'gemini') {
-        log('Direct Google Gemini API selected. Fetching image tile to convert to base64...', 'info');
-        const base64Img = await this.imageToBase64(imageUrl);
+        log('Direct Google Gemini API selected. Using converted base64 data...', 'info');
         
         log('Sending request to Google Gemini API (model: gemini-2.5-flash)...', 'info');
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
@@ -215,8 +223,8 @@ Ensure you classify the entire visible area logically and realistically based on
                   { text: systemPrompt + '\n\nAnalyze this satellite image tile for brownfields and vacant lots.' },
                   {
                     inlineData: {
-                      mimeType: base64Img.mimeType,
-                      data: base64Img.data
+                      mimeType: "image/jpeg",
+                      data: dataUrl.split(',')[1]
                     }
                   }
                 ]
@@ -270,7 +278,7 @@ Ensure you classify the entire visible area logically and realistically based on
                 role: 'user',
                 content: [
                   { type: 'text', text: 'Analyze this satellite image tile for brownfields and vacant lots.' },
-                  { type: 'image_url', image_url: { url: imageUrl } }
+                  { type: 'image_url', image_url: { url: dataUrl } }
                 ]
               }
             ],
@@ -306,7 +314,6 @@ Ensure you classify the entire visible area logically and realistically based on
         }
       } else if (provider === 'anthropic') {
         log('Direct Anthropic API selected. Fetching image tile to convert to base64...', 'info');
-        const base64Img = await this.imageToBase64(imageUrl);
         
         log('Sending request to Anthropic API (model: claude-3-5-sonnet-latest)...', 'info');
         const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -329,8 +336,8 @@ Ensure you classify the entire visible area logically and realistically based on
                     type: 'image',
                     source: {
                       type: 'base64',
-                      media_type: base64Img.mimeType,
-                      data: base64Img.data
+                      media_type: 'image/jpeg',
+                      data: dataUrl.split(',')[1]
                     }
                   },
                   {

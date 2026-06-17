@@ -49,6 +49,12 @@ Format:
       }
     } catch (err) {
       console.error('AI Mayor processing failed', err);
+      store.dispatch({
+        type: 'SET_PARAMS',
+        payload: {
+          aiMayorThoughts: `Error processing AI Mayor decision: ${err.message}`
+        }
+      });
     } finally {
       this.isRequestPending = false;
       eventBus.emit('ai-thinking-completed');

@@ -78,6 +78,7 @@ export class CellularAutomata {
       cell.type = type;
       cell.density = type === 'RESIDENTIAL_HIGH' ? 6 : 2;
       cell.population = type === 'RESIDENTIAL_HIGH' ? 30 : 6;
+      cell.age = 0;
       newlyUrbanized.push(cell);
     };
 
@@ -89,7 +90,7 @@ export class CellularAutomata {
     };
 
     // --- Rule 1: Spontaneous Growth ---
-    const diffusionChance = (params.diffusion / 2500.0) * globalCapFactor * demandFactor; // scaled down to avoid flash growth
+    const diffusionChance = (params.diffusion / 10000.0) * globalCapFactor * demandFactor; // scaled down x4 to avoid flash growth
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = grid[y][x];
@@ -106,7 +107,7 @@ export class CellularAutomata {
     }
 
     // --- Rule 2: New Spreading Center ---
-    const breedChance = (params.breed / 150.0) * globalCapFactor * demandFactor;
+    const breedChance = (params.breed / 600.0) * globalCapFactor * demandFactor;
     newlyUrbanized.forEach(cell => {
       if (Math.random() < breedChance) {
         // Find 1-2 random neighbors to urbanize
@@ -136,7 +137,7 @@ export class CellularAutomata {
     // --- Rule 3: Edge (Organic) Growth ---
     // Make copy of types to avoid concurrent modification issues in the loops
     const typeCopy = grid.map(row => row.map(c => c.type));
-    const spreadChance = (params.spread / 200.0) * globalCapFactor * demandFactor;
+    const spreadChance = (params.spread / 800.0) * globalCapFactor * demandFactor;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -170,7 +171,7 @@ export class CellularAutomata {
     }
 
     // --- Rule 4: Road-Influenced Growth ---
-    const roadGravityChance = (params.roadGravity / 200.0) * globalCapFactor * demandFactor;
+    const roadGravityChance = (params.roadGravity / 800.0) * globalCapFactor * demandFactor;
     if (newlyUrbanized.length > 0 && Math.random() < roadGravityChance) {
       // Pick a random newly urbanized cell
       const cell = newlyUrbanized[Math.floor(Math.random() * newlyUrbanized.length)];
@@ -231,10 +232,15 @@ export class CellularAutomata {
         const isInd = cell.type === 'INDUSTRIAL';
         
         if (isRes || isCom || isInd) {
+          cell.age = (cell.age || 0) + 1;
+
           // A. Decay & Abandonment (due to high taxes or high pollution)
           const localPollution = cell.pollution || 0;
-          if (taxRate > 20 || (isRes && localPollution > 0.40) || (isCom && localPollution > 0.55)) {
-            const decayProb = 0.02 + (taxRate - 20) * 0.004 + (isRes ? localPollution * 0.08 : 0);
+          const infantMortality = (cell.age < 15) ? 0.05 : 0; // High failure early on
+          const ageResilience = (cell.age > 50) ? 0.03 : 0; // Established buildings survive better
+
+          if (taxRate > 20 || (isRes && localPollution > 0.40) || (isCom && localPollution > 0.55) || infantMortality > 0) {
+            const decayProb = Math.max(0, 0.02 + (taxRate - 20) * 0.004 + (isRes ? localPollution * 0.08 : 0) + infantMortality - ageResilience);
             if (Math.random() < decayProb) {
               cell.density = Math.max(0, cell.density - 1);
               if (cell.density === 0) {
@@ -243,6 +249,7 @@ export class CellularAutomata {
                 cell.population = 0;
                 cell.buildingId = null;
                 cell.buildingUse = null;
+                cell.age = 0;
               } else {
                 // Lower population
                 cell.population = Math.max(0, cell.population - 4);

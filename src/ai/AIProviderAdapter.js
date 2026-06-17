@@ -32,20 +32,26 @@ export class AIProviderAdapter {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://realcity3000.vercel.app',
+            'X-Title': 'RealCity3000'
           },
           body: JSON.stringify({
-            model: 'deepseek/deepseek-chat',
+            model: 'google/gemini-2.5-flash',
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt }
             ]
           })
         });
-        const data = await response.json();
-        if (data.choices && data.choices[0]) {
-          return this.cleanJSON(data.choices[0].message.content);
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`OpenRouter HTTP ${response.status}: ${errText.substring(0, 150)}`);
         }
+        const data = await response.json();
+        if (data.error) throw new Error(`OpenRouter API Error: ${data.error.message || JSON.stringify(data.error)}`);
+        if (data.choices && data.choices[0]) return this.cleanJSON(data.choices[0].message.content);
+        throw new Error('OpenRouter response did not contain message content.');
       } else if (provider === 'openai') {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -62,10 +68,14 @@ export class AIProviderAdapter {
             response_format: { type: 'json_object' }
           })
         });
-        const data = await response.json();
-        if (data.choices && data.choices[0]) {
-          return this.cleanJSON(data.choices[0].message.content);
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`OpenAI HTTP ${response.status}: ${errText.substring(0, 150)}`);
         }
+        const data = await response.json();
+        if (data.error) throw new Error(`OpenAI API Error: ${data.error.message || JSON.stringify(data.error)}`);
+        if (data.choices && data.choices[0]) return this.cleanJSON(data.choices[0].message.content);
+        throw new Error('OpenAI response did not contain message content.');
       } else if (provider === 'anthropic') {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -85,10 +95,14 @@ export class AIProviderAdapter {
             ]
           })
         });
-        const data = await response.json();
-        if (data.content && data.content[0]) {
-          return this.cleanJSON(data.content[0].text);
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Anthropic HTTP ${response.status}: ${errText.substring(0, 150)}`);
         }
+        const data = await response.json();
+        if (data.error) throw new Error(`Anthropic API Error: ${data.error.message || JSON.stringify(data.error)}`);
+        if (data.content && data.content[0]) return this.cleanJSON(data.content[0].text);
+        throw new Error('Anthropic response did not contain content.');
       } else if (provider === 'gemini') {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
@@ -97,10 +111,14 @@ export class AIProviderAdapter {
             contents: [{ parts: [{ text: systemPrompt + '\n\n' + userPrompt }] }]
           })
         });
-        const data = await response.json();
-        if (data.candidates && data.candidates[0].content.parts[0]) {
-          return this.cleanJSON(data.candidates[0].content.parts[0].text);
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Gemini HTTP ${response.status}: ${errText.substring(0, 150)}`);
         }
+        const data = await response.json();
+        if (data.error) throw new Error(`Gemini API Error: ${data.error.message || JSON.stringify(data.error)}`);
+        if (data.candidates && data.candidates[0].content.parts[0]) return this.cleanJSON(data.candidates[0].content.parts[0].text);
+        throw new Error('Gemini response did not contain text content.');
       } else if (provider === 'groq') {
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
@@ -116,10 +134,14 @@ export class AIProviderAdapter {
             ]
           })
         });
-        const data = await response.json();
-        if (data.choices && data.choices[0]) {
-          return this.cleanJSON(data.choices[0].message.content);
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Groq HTTP ${response.status}: ${errText.substring(0, 150)}`);
         }
+        const data = await response.json();
+        if (data.error) throw new Error(`Groq API Error: ${data.error.message || JSON.stringify(data.error)}`);
+        if (data.choices && data.choices[0]) return this.cleanJSON(data.choices[0].message.content);
+        throw new Error('Groq response did not contain message content.');
       } else if (provider === 'deepseek') {
         const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
           method: 'POST',
@@ -135,16 +157,20 @@ export class AIProviderAdapter {
             ]
           })
         });
-        const data = await response.json();
-        if (data.choices && data.choices[0]) {
-          return this.cleanJSON(data.choices[0].message.content);
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`DeepSeek HTTP ${response.status}: ${errText.substring(0, 150)}`);
         }
+        const data = await response.json();
+        if (data.error) throw new Error(`DeepSeek API Error: ${data.error.message || JSON.stringify(data.error)}`);
+        if (data.choices && data.choices[0]) return this.cleanJSON(data.choices[0].message.content);
+        throw new Error('DeepSeek response did not contain message content.');
       }
 
       return this.generateMockMayorPayload();
     } catch (err) {
       console.error('AI Request failed', err);
-      return this.generateMockMayorPayload();
+      throw err;
     }
   }
 

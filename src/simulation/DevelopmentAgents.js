@@ -130,6 +130,7 @@ export class DevelopmentAgents {
           }
           cell.buildingId = null;
           cell.buildingUse = null;
+          cell.age = 0;
         }
       }
     }
@@ -170,6 +171,7 @@ export class DevelopmentAgents {
           cell.population = 0; // Jobs
           cell.buildingId = null;
           cell.buildingUse = null;
+          cell.age = 0;
         }
       }
     }
@@ -210,6 +212,7 @@ export class DevelopmentAgents {
           cell.population = 0;
           cell.buildingId = null;
           cell.buildingUse = null;
+          cell.age = 0;
         }
       }
     }

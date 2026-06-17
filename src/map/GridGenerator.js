@@ -25,7 +25,8 @@ export class GridGenerator {
           // Building outline data mapped back for 3D extrusion logic
           buildingId: null,
           buildingUse: null,
-          originalType: 'VACANT'
+          originalType: 'VACANT',
+          age: 100
         };
       });
     });
@@ -181,25 +182,7 @@ export class GridGenerator {
       return isInside;
     };
 
-    // 1. Rasterize Water
-    parsedData.water.forEach(w => {
-      const poly = w.coords.map(c => ({ x: projectLng(c.lng), y: projectLat(c.lat) }));
-      const minX = Math.min(...poly.map(p => p.x));
-      const maxX = Math.max(...poly.map(p => p.x));
-      const minY = Math.min(...poly.map(p => p.y));
-      const maxY = Math.max(...poly.map(p => p.y));
-      
-      for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-          if (pointInPolygon({ x, y }, poly)) {
-            grid[y][x].type = 'WATER';
-            grid[y][x].originalType = 'WATER';
-          }
-        }
-      }
-    });
-
-    // 2. Rasterize Roads (Bresenham's Line Algorithm)
+    // Rasterize helpers
     const drawLine = (x0, y0, x1, y1, callback) => {
       const dx = Math.abs(x1 - x0);
       const dy = Math.abs(y1 - y0);
@@ -216,7 +199,70 @@ export class GridGenerator {
       }
     };
 
+    // 1. Rasterize Water
+    parsedData.water.forEach(w => {
+      const isClosed = w.coords.length > 2 &&
+                       w.coords[0].lat === w.coords[w.coords.length - 1].lat &&
+                       w.coords[0].lng === w.coords[w.coords.length - 1].lng;
+      const isLine = w.isWaterway || !isClosed;
+
+      if (isLine) {
+        const typeStr = String(w.type).toLowerCase();
+        let bufferRadius = 1;
+        if (typeStr === 'river') bufferRadius = 2;
+        if (['stream', 'ditch', 'drain'].includes(typeStr)) bufferRadius = 0;
+
+        for (let i = 0; i < w.coords.length - 1; i++) {
+          const pt0 = w.coords[i];
+          const pt1 = w.coords[i+1];
+          const x0 = projectLng(pt0.lng);
+          const y0 = projectLat(pt0.lat);
+          const x1 = projectLng(pt1.lng);
+          const y1 = projectLat(pt1.lat);
+
+          drawLine(x0, y0, x1, y1, (x, y) => {
+            for (let dy = -bufferRadius; dy <= bufferRadius; dy++) {
+              for (let dx = -bufferRadius; dx <= bufferRadius; dx++) {
+                const nx = x + dx;
+                const ny = y + dy;
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                  if (dx*dx + dy*dy <= bufferRadius*bufferRadius + 0.5) {
+                    grid[ny][nx].type = 'WATER';
+                    grid[ny][nx].originalType = 'WATER';
+                    grid[ny][nx].elevation = -0.5;
+                  }
+                }
+              }
+            }
+          });
+        }
+      } else {
+        const poly = w.coords.map(c => ({ x: projectLng(c.lng), y: projectLat(c.lat) }));
+        const minX = Math.min(...poly.map(p => p.x));
+        const maxX = Math.max(...poly.map(p => p.x));
+        const minY = Math.min(...poly.map(p => p.y));
+        const maxY = Math.max(...poly.map(p => p.y));
+        
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            if (pointInPolygon({ x, y }, poly)) {
+              grid[y][x].type = 'WATER';
+              grid[y][x].originalType = 'WATER';
+              grid[y][x].elevation = -0.5;
+            }
+          }
+        }
+      }
+    });
+
+    // 2. Rasterize Roads (Bresenham's Line Algorithm)
     parsedData.roads.forEach(road => {
+      const typeStr = String(road.type).toLowerCase();
+      let bufferRadius = 0;
+      if (['motorway', 'trunk', 'primary', 'secondary'].includes(typeStr)) {
+        bufferRadius = 1;
+      }
+
       for (let i = 0; i < road.coords.length - 1; i++) {
         const pt0 = road.coords[i];
         const pt1 = road.coords[i+1];
@@ -226,9 +272,21 @@ export class GridGenerator {
         const y1 = projectLat(pt1.lat);
         
         drawLine(x0, y0, x1, y1, (x, y) => {
-          grid[y][x].type = 'ROAD';
-          grid[y][x].originalType = 'ROAD';
-          grid[y][x].roadAccess = 1.0;
+          for (let dy = -bufferRadius; dy <= bufferRadius; dy++) {
+            for (let dx = -bufferRadius; dx <= bufferRadius; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                if (dx*dx + dy*dy <= bufferRadius*bufferRadius + 0.5) {
+                  if (grid[ny][nx].type !== 'WATER') {
+                    grid[ny][nx].type = 'ROAD';
+                    grid[ny][nx].originalType = 'ROAD';
+                    grid[ny][nx].roadAccess = 1.0;
+                  }
+                }
+              }
+            }
+          }
           
           // Connect to previous step to form path matrix
           const prevPt = i > 0 ? road.coords[i-1] : null;
