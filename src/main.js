@@ -129,9 +129,8 @@ function setupPhase1Listeners() {
         statusText.textContent = 'Parsing geometries and highways...';
         parsed = overpassService.parseGeometries(rawOsm);
       } catch (osmErr) {
-        console.warn('OSM query failed or timed out. Falling back to procedural layout.', osmErr);
-        parsed = overpassService.generateProceduralElements(state.bbox);
-        alert('Notice: Overpass API connection timed out or is rate-limited. Seeding the sandbox grid with a procedurally generated road network and buildings instead.');
+        console.error('OSM query failed or timed out:', osmErr);
+        throw new Error('OpenStreetMap Overpass API is currently overloaded or timed out. Please try to extract the region again.');
       }
 
       // 2. Fetch Historical Research timeline context asynchronously
