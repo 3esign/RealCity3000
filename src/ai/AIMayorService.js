@@ -41,7 +41,7 @@ Format:
     eventBus.emit('ai-thinking-started');
 
     try {
-      const responseText = await this.adapter.sendRequest(systemPrompt, userPrompt);
+      const responseText = await this.adapter.sendRequest(systemPrompt, userPrompt, { feature: 'mayor' });
       const decision = JSON.parse(responseText);
       
       if (decision && decision.actions) {

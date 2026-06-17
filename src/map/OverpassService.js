@@ -1,5 +1,3 @@
-import store from '../state/store.js';
-
 export class OverpassService {
   constructor() {
     this.endpoint = 'https://overpass-api.de/api/interpreter';
@@ -27,7 +25,6 @@ export class OverpassService {
     }
 
     // Construct Overpass QL query
-    // [out:json] sets json output, out geom returns coordinate arrays in ways directly
     const query = `[out:json][timeout:30];
 (
   way["building"](${south},${west},${north},${east});
@@ -38,135 +35,183 @@ export class OverpassService {
 );
 out geom;`;
 
-    const body = `data=${encodeURIComponent(query)}`;
-    
     const endpoints = [
       'https://overpass-api.de/api/interpreter',
       'https://lz4.overpass-api.de/api/interpreter',
       'https://z.overpass-api.de/api/interpreter',
-      'https://overpass.openstreetmap.ru/api/interpreter',
-      '/api/overpass' // Local Vercel proxy fallback
+      'https://overpass.openstreetmap.ru/api/interpreter'
     ];
 
-    // Shuffle endpoint order so we don't always hammer the same first server
-    // Keep proxy fallback at the end since it's our ultimate backup
-    const mainEndpoints = endpoints.slice(0, -1).sort(() => Math.random() - 0.5);
-    const shuffled = [...mainEndpoints, endpoints[endpoints.length - 1]];
-    log(`Shuffled Overpass endpoints: ${shuffled.map(url => url.startsWith('/') ? 'Local Vercel Proxy' : url.split('/')[2]).join(', ')}`);
-
-    let lastError = null;
-
-    // Phase 1: Try POST method (Standard)
-    for (let i = 0; i < shuffled.length; i++) {
-      const url = shuffled[i];
-      const host = url.startsWith('/') ? 'Local Vercel Proxy' : url.split('/')[2];
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout per endpoint
-      
-      try {
-        log(`Querying mirror ${i + 1}/${shuffled.length}: ${host} (8s timeout)...`);
-        
-        // Prepare fetch options. We don't need Content-Type for relative endpoint if it uses json body,
-        // but for Overpass API we must use application/x-www-form-urlencoded.
-        const isProxy = url.startsWith('/');
-        const fetchUrl = isProxy ? url : url;
-        const fetchOptions = {
-          method: 'POST',
-          signal: controller.signal
-        };
-
-        if (isProxy) {
-          fetchOptions.headers = { 'Content-Type': 'application/json' };
-          fetchOptions.body = JSON.stringify({ query });
-        } else {
-          fetchOptions.headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-          fetchOptions.body = body;
-        }
-
-        const response = await fetch(fetchUrl, fetchOptions);
-        clearTimeout(timeoutId);
-        
-        if (response.status === 429 || response.status === 504) {
-          log(`Mirror ${host} returned status ${response.status} (Rate Limited/Timeout). Trying next mirror...`, 'warn');
-          lastError = new Error(`Overpass API ${url} responded with HTTP ${response.status}`);
-          await new Promise(r => setTimeout(r, 500));
-          continue;
-        }
-        
-        if (!response.ok) {
-          log(`Mirror ${host} returned error code ${response.status}. Trying next mirror...`, 'warn');
-          lastError = new Error(`Overpass API ${url} responded with HTTP ${response.status}`);
-          continue;
-        }
-        
-        const data = await response.json();
-        if (data && data.remark && data.remark.includes('runtime error')) {
-          log(`Mirror ${host} succeeded but returned runtime error in remark: "${data.remark}". Trying next...`, 'warn');
-          lastError = new Error(`Overpass API ${url} runtime error: ${data.remark}`);
-          continue;
-        }
-        
-        if (data && (data.elements || data.remark)) {
-          log(`Success! Fetched ${data.elements?.length || 0} spatial features from ${host}`, 'success');
-          // Cache successful result
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify(data));
-          } catch (cacheErr) {
-            console.warn('Failed to cache OSM data:', cacheErr);
-          }
-          return data;
-        }
-      } catch (err) {
-        clearTimeout(timeoutId);
-        const reason = err.name === 'AbortError' ? 'Timeout (8s exceeded)' : err.message;
-        log(`Mirror ${host} failed: ${reason}`, 'error');
-        lastError = err;
-        // Breathing gap before next attempt
-        if (i < shuffled.length - 1) {
-          await new Promise(r => setTimeout(r, 500));
-        }
-      }
-    }
-
-    // Phase 2: GET method fallback for the top 2 main mirrors (avoids any preflight OPTIONS requests)
-    log('POST requests failed. Attempting GET method fallback on primary mirrors...', 'warn');
-    const getMirrors = shuffled.filter(url => !url.startsWith('/')).slice(0, 2);
-    for (let i = 0; i < getMirrors.length; i++) {
-      const baseUrl = getMirrors[i];
-      const host = baseUrl.split('/')[2];
-      const getUrl = `${baseUrl}?data=${encodeURIComponent(query)}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s for GET fallback
-
-      try {
-        log(`Querying mirror ${host} via GET (10s timeout)...`);
-        const response = await fetch(getUrl, {
-          method: 'GET',
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data && (data.elements || data.remark)) {
-            log(`Success! Fetched ${data.elements?.length || 0} spatial features from ${host} via GET`, 'success');
-            try {
-              localStorage.setItem(cacheKey, JSON.stringify(data));
-            } catch (cacheErr) {
-              console.warn('Failed to cache OSM data:', cacheErr);
-            }
-            return data;
-          }
-        } else {
-          log(`GET mirror ${host} returned status ${response.status}`, 'warn');
-        }
-      } catch (err) {
-        clearTimeout(timeoutId);
-        log(`GET fallback to ${host} failed: ${err.message}`, 'error');
-      }
-    }
+    const shuffled = [...endpoints].sort(() => Math.random() - 0.5);
+    const includeProxy = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.PROD : true;
     
-    throw lastError || new Error('All Overpass API endpoints failed. Please try again in a moment.');
+    const allTargets = [
+      ...(includeProxy ? [{ url: '/api/overpass', kind: 'proxy' }] : []),
+      ...shuffled.map(url => ({ url, kind: 'mirror' }))
+    ];
+
+    if (!includeProxy) {
+      log('Development mode detected. Local proxy fallback is disabled; direct mirrors will be used.', 'warn');
+    }
+
+    log(`Endpoints priority order: ${allTargets.map(target => target.kind === 'proxy' ? 'Local Proxy' : target.url.split('/')[2]).join(', ')}`);
+
+    const controllers = allTargets.map(() => new AbortController());
+    let resolved = false;
+
+    const attempts = allTargets.map(async (target, index) => {
+      const controller = controllers[index];
+      const host = target.kind === 'proxy' ? 'Local Proxy' : target.url.split('/')[2];
+      const timeoutMs = target.kind === 'proxy' ? 10000 : 8000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        let response;
+        if (target.kind === 'proxy') {
+          log(`Querying Backup Proxy: ${host} (10s timeout)...`);
+          response = await fetch(target.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query }),
+            signal: controller.signal
+          });
+        } else {
+          log(`Querying mirror ${index + 1}/${shuffled.length}: ${host} via GET (8s timeout)...`);
+          const getUrl = `${target.url}?data=${encodeURIComponent(query)}`;
+          response = await fetch(getUrl, {
+            method: 'GET',
+            signal: controller.signal
+          });
+        }
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const status = response.status;
+          if (target.kind === 'mirror' && (status === 429 || status === 504)) {
+            log(`Mirror ${host} rate-limited/timeout (${status}).`, 'warn');
+          } else {
+            log(`${target.kind === 'proxy' ? 'Backup Proxy' : 'Mirror'} ${host} returned error code ${status}.`, 'warn');
+          }
+          throw new Error(`${host} returned HTTP ${status}`);
+        }
+
+        const data = await response.json();
+        if (!data || (!data.elements && !data.remark)) {
+          throw new Error(`${host} returned an empty Overpass response`);
+        }
+
+        if (data.remark && typeof data.remark === 'string' && data.remark.includes('runtime error')) {
+          log(`${target.kind === 'proxy' ? 'Backup Proxy' : 'Mirror'} ${host} returned runtime error: ${data.remark}`, 'warn');
+          throw new Error(`Mirror runtime error: ${data.remark}`);
+        }
+
+        log(`Success! Fetched ${data.elements?.length || 0} features from ${host}`, 'success');
+        try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch (e) {}
+
+        if (!resolved) {
+          resolved = true;
+          controllers.forEach((ctrl, ctrlIndex) => {
+            if (ctrlIndex !== index) ctrl.abort();
+          });
+        }
+
+        return data;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (!resolved || err.name !== 'AbortError') {
+          const reason = err.name === 'AbortError' ? 'Timeout exceeded' : err.message;
+          log(`${target.kind === 'proxy' ? 'Proxy' : 'Mirror'} ${host} failed: ${reason}`, 'error');
+        }
+        throw err;
+      }
+    });
+
+    try {
+      return await Promise.any(attempts);
+    } catch (aggregateErr) {
+      const finalError = aggregateErr?.errors?.[aggregateErr.errors.length - 1];
+      throw finalError || new Error('All Overpass mirrors and Backup Proxy endpoints failed. Please check your internet connection or try again later.');
+    }
+  }
+
+  inferBuildingUse(tags = {}) {
+    const building = String(tags.building || '').toLowerCase();
+    const useTag = String(tags['building:use'] || tags.use || '').toLowerCase();
+    const amenity = String(tags.amenity || '').toLowerCase();
+    const shop = String(tags.shop || '').toLowerCase();
+    const office = String(tags.office || '').toLowerCase();
+    const landuse = String(tags.landuse || '').toLowerCase();
+
+    const isIndustrial = [
+      'industrial',
+      'factory',
+      'warehouse',
+      'manufacture',
+      'manufacturing',
+      'depot'
+    ].includes(building) || ['industrial', 'factory', 'warehouse', 'manufacturing'].includes(useTag) || landuse === 'industrial';
+
+    if (isIndustrial) return 'industrial';
+
+    const isCommercial = [
+      'commercial',
+      'retail',
+      'office',
+      'shop'
+    ].includes(building) || Boolean(shop) || Boolean(office) || ['commercial', 'retail', 'office', 'shop'].includes(useTag);
+
+    if (isCommercial) return 'commercial';
+
+    const isInstitutional = [
+      'school',
+      'hospital',
+      'university',
+      'college',
+      'government',
+      'public',
+      'civic',
+      'community',
+      'church',
+      'clinic',
+      'library'
+    ].includes(building) || [
+      'school',
+      'hospital',
+      'university',
+      'college',
+      'government',
+      'public',
+      'civic',
+      'community',
+      'church',
+      'clinic',
+      'library'
+    ].includes(amenity);
+
+    if (isInstitutional) return 'institutional';
+
+    const isResidential = [
+      'house',
+      'apartments',
+      'detached',
+      'semidetached_house',
+      'terrace',
+      'residential',
+      'dormitory',
+      'bungalow',
+      'hut',
+      'residential_building'
+    ].includes(building) || [
+      'residential',
+      'house',
+      'apartments',
+      'dormitory'
+    ].includes(useTag);
+
+    if (isResidential) return 'residential';
+
+    return 'residential';
   }
 
   // Parses elements into clean geometries for RealCity3000
@@ -194,7 +239,7 @@ out geom;`;
           type: tags.building,
           levels: parseInt(tags['building:levels']) || 1,
           height: parseFloat(tags.height) || null,
-          use: tags['building:use'] || 'residential'
+          use: this.inferBuildingUse(tags)
         });
       } else if (tags.highway) {
         roads.push({

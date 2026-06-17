@@ -78,19 +78,20 @@ export class ValidationService {
       }
 
       // 4. Local systems dynamics updates to RCI demand
-      let totalR = 0, totalC = 0, totalI = 0, totalPop = 0, vacant = 0;
+      let totalR = 0, totalC = 0, totalI = 0, totalInst = 0, totalPop = 0, vacant = 0;
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
           const c = localGrid[y][x];
           if (c.type.startsWith('RESIDENTIAL')) { totalR++; totalPop += c.population; }
           else if (c.type === 'COMMERCIAL') totalC++;
           else if (c.type === 'INDUSTRIAL') totalI++;
+          else if (c.type === 'INSTITUTIONAL') totalInst++;
           else if (c.type === 'VACANT') vacant++;
         }
       }
       
       const density = ((height * width - vacant) / (height * width)) * 100;
-      const jobCapacity = (totalC * 5) + (totalI * 8);
+      const jobCapacity = (totalC * 5) + (totalI * 8) + (totalInst * 4);
       const housingGap = jobCapacity - totalPop;
 
       const rDelta = (housingGap * 0.015) - (params.taxRate - 15) * 0.4 + params.populationGrowth * 1.2 + params.economicGrowth * 0.6;
@@ -121,8 +122,8 @@ export class ValidationService {
         const simCell = simGrid[y][x];
         const origCell = originalGrid[y][x];
 
-        const simDev = simCell.type.startsWith('RESIDENTIAL') || simCell.type === 'COMMERCIAL' || simCell.type === 'INDUSTRIAL';
-        const origDev = origCell.type.startsWith('RESIDENTIAL') || origCell.type === 'COMMERCIAL' || origCell.type === 'INDUSTRIAL';
+        const simDev = simCell.type.startsWith('RESIDENTIAL') || simCell.type === 'COMMERCIAL' || simCell.type === 'INDUSTRIAL' || simCell.type === 'INSTITUTIONAL';
+        const origDev = origCell.type.startsWith('RESIDENTIAL') || origCell.type === 'COMMERCIAL' || origCell.type === 'INDUSTRIAL' || origCell.type === 'INSTITUTIONAL';
 
         if (simDev && origDev) {
           tp++;
@@ -173,7 +174,7 @@ export class ValidationService {
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = grid[y][x];
-        const isDev = cell.type.startsWith('RESIDENTIAL') || cell.type === 'COMMERCIAL' || cell.type === 'INDUSTRIAL';
+        const isDev = cell.type.startsWith('RESIDENTIAL') || cell.type === 'COMMERCIAL' || cell.type === 'INDUSTRIAL' || cell.type === 'INSTITUTIONAL';
         if (isDev) {
           const zoneRow = Math.min(Math.floor(y / rowStep), 7);
           const zoneCol = Math.min(Math.floor(x / colStep), 7);

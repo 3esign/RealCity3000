@@ -1,3 +1,52 @@
+async function readQueryFromRequest(req) {
+  if (req.method === 'GET') {
+    const query = req.query?.query || req.query?.data;
+    return typeof query === 'string' ? query : '';
+  }
+
+  let query = req.body?.query;
+  if (query) return query;
+
+  if (typeof req.body === 'string') {
+    try {
+      const parsed = JSON.parse(req.body);
+      if (parsed?.query) return parsed.query;
+    } catch (e) {
+      // Ignore malformed body and fall through to empty query.
+    }
+  }
+
+  return '';
+}
+
+async function fetchMirror(endpoint, query, controller) {
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`Endpoint ${endpoint} returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || (!data.elements && !data.remark)) {
+      throw new Error(`Endpoint ${endpoint} returned an invalid Overpass payload`);
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export default async function handler(req, res) {
   // Add CORS headers to support all origins
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -8,29 +57,17 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  if (req.method !== 'POST') {
+  if (req.method !== 'POST' && req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
-  let query = req.body?.query;
-  if (!query) {
-    try {
-      if (typeof req.body === 'string') {
-        const parsed = JSON.parse(req.body);
-        query = parsed.query;
-      }
-    } catch (e) {
-      // Ignore
-    }
-  }
-
+  const query = await readQueryFromRequest(req);
   if (!query) {
     res.status(400).json({ error: 'Missing query parameter in request body' });
     return;
@@ -39,41 +76,38 @@ export default async function handler(req, res) {
   const endpoints = [
     'https://overpass-api.de/api/interpreter',
     'https://lz4.overpass-api.de/api/interpreter',
-    'https://z.overpass-api.de/api/interpreter'
-  ];
+    'https://z.overpass-api.de/api/interpreter',
+    'https://overpass.openstreetmap.ru/api/interpreter'
+  ].sort(() => Math.random() - 0.5);
 
-  let lastError = null;
+  const controllers = endpoints.map(() => new AbortController());
+  let resolved = false;
 
-  for (const endpoint of endpoints) {
+  const attempts = endpoints.map(async (endpoint, index) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 second timeout for proxy backend
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const data = await response.json();
-        res.status(200).json(data);
-        return;
-      } else {
-        lastError = new Error(`Endpoint ${endpoint} returned status ${response.status}`);
+      const data = await fetchMirror(endpoint, query, controllers[index]);
+      if (!resolved) {
+        resolved = true;
+        controllers.forEach((controller, controllerIndex) => {
+          if (controllerIndex !== index) controller.abort();
+        });
       }
+      return data;
     } catch (err) {
-      lastError = err;
+      if (!resolved || err.name !== 'AbortError') {
+        console.warn(`[api/overpass] ${endpoint} failed: ${err.message}`);
+      }
+      throw err;
     }
-  }
-
-  res.status(502).json({
-    error: 'All Overpass mirrors failed in serverless function proxy',
-    details: lastError?.message || 'Unknown error'
   });
+
+  try {
+    const data = await Promise.any(attempts);
+    res.status(200).json(data);
+  } catch (aggregateErr) {
+    res.status(502).json({
+      error: 'All Overpass mirrors failed in serverless function proxy',
+      details: aggregateErr?.errors?.[aggregateErr.errors.length - 1]?.message || 'Unknown error'
+    });
+  }
 }

@@ -256,11 +256,18 @@ export class GridGenerator {
 
       // Decide zoning type
       let type = 'RESIDENTIAL_LOW';
+      const normalizedUse = String(b.use || '').toLowerCase();
       if (b.levels > 4 || b.height > 15) {
         type = 'RESIDENTIAL_HIGH';
       }
-      if (b.use === 'commercial' || b.use === 'retail' || b.type === 'commercial' || b.type === 'retail') {
+      if (normalizedUse === 'commercial' || normalizedUse === 'retail' || b.type === 'commercial' || b.type === 'retail') {
         type = 'COMMERCIAL';
+      } else if (normalizedUse === 'industrial') {
+        type = 'INDUSTRIAL';
+      } else if (normalizedUse === 'institutional') {
+        type = 'INSTITUTIONAL';
+      } else if (normalizedUse === 'residential') {
+        type = b.levels > 4 || b.height > 15 ? 'RESIDENTIAL_HIGH' : 'RESIDENTIAL_LOW';
       }
 
       for (let y = minY; y <= maxY; y++) {
@@ -270,8 +277,13 @@ export class GridGenerator {
             if (grid[y][x].type !== 'ROAD' && grid[y][x].type !== 'WATER') {
               grid[y][x].type = type;
               grid[y][x].originalType = type;
-              grid[y][x].density = b.levels * 2;
-              grid[y][x].population = b.levels * 4;
+              if (type === 'COMMERCIAL' || type === 'INDUSTRIAL' || type === 'INSTITUTIONAL') {
+                grid[y][x].density = Math.max(1, Math.min(b.levels || 1, 4));
+                grid[y][x].population = 0;
+              } else {
+                grid[y][x].density = b.levels * 2;
+                grid[y][x].population = b.levels * 4;
+              }
               grid[y][x].buildingId = b.id;
               grid[y][x].buildingUse = b.use;
             }

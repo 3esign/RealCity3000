@@ -55,6 +55,9 @@ class Store {
       },
       aiUseUniversal: true,
       aiProvider: 'openai',
+      visionProvider: 'openai',
+      mayorProvider: 'openai',
+      historyProvider: 'openai',
       aiMayorThoughts: 'Waiting to begin governance.',
       
       // Interactive layers

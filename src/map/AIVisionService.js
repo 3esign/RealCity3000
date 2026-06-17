@@ -1,4 +1,5 @@
 import store from '../state/store.js';
+import { resolveFeatureConfig } from '../ai/providerCapabilities.js';
 
 export class AIVisionService {
   constructor() {}
@@ -33,8 +34,8 @@ export class AIVisionService {
 
   async analyzeSatelliteImage(imageUrl, logToLoader = null) {
     const state = store.getState();
-    const apiKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.vision;
-    const provider = state.aiProvider;
+    const config = resolveFeatureConfig(state, 'vision');
+    const { apiKey, provider, supported } = config;
 
     const log = (msg, type = 'info') => {
       console.log(msg);
@@ -46,9 +47,14 @@ export class AIVisionService {
       return this.generateMockAIResponse(state.gridWidth, state.gridHeight);
     }
 
+    if (!supported) {
+      log(`Provider "${provider}" does not support satellite vision. Falling back to local terrain heuristics.`, 'warn');
+      return this.generateMockAIResponse(state.gridWidth, state.gridHeight);
+    }
+
     if (!apiKey) {
-      log(`No API key provided for the selected AI provider "${provider}". Skipping API inference.`, 'error');
-      throw new Error(`API key is missing for provider "${provider}"`);
+      log(`No API key provided for the selected AI provider "${provider}". Falling back to local terrain heuristics.`, 'warn');
+      return this.generateMockAIResponse(state.gridWidth, state.gridHeight);
     }
 
     const systemPrompt = `You are a satellite image interpretation system for urban planning.
@@ -84,7 +90,14 @@ Map features to this JSON format:
 
 Ensure you classify the entire visible area logically and realistically based on the visual layout of the image. Be generous with coverage—residential, commercial, industrial, forests, water, and roads should cover a substantial portion of the image.`;
 
+    let elapsedTimer;
     try {
+      let elapsed = 0;
+      elapsedTimer = setInterval(() => {
+        elapsed += 2;
+        log(`Waiting for ${provider} AI Vision response... (${elapsed}s elapsed)`, 'info');
+      }, 2000);
+
       if (provider === 'openrouter') {
         log('Sending request to OpenRouter API (model: google/gemini-2.5-flash)...', 'info');
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -357,12 +370,15 @@ Ensure you classify the entire visible area logically and realistically based on
           throw new Error('Empty or invalid content text in Anthropic response');
         }
       } else {
-        log(`Provider "${provider}" does not support multimodal image analysis natively on client-side. Please use OpenRouter, OpenAI, Gemini, or Groq.`, 'error');
-        throw new Error(`Provider "${provider}" is not supported for vision analysis.`);
+        log(`Provider "${provider}" does not support multimodal image analysis natively on client-side. Falling back to local terrain heuristics.`, 'warn');
+        return this.generateMockAIResponse(state.gridWidth, state.gridHeight);
       }
     } catch (err) {
-      log(`AI Vision analysis failed: ${err.message}`, 'error');
-      throw err;
+      log(`AI Vision API request failed: ${err.message}. Please check your API key, network, or try another provider.`, 'error');
+      log('Falling back to local procedural terrain heuristics.', 'warn');
+      return this.generateMockAIResponse(state.gridWidth, state.gridHeight);
+    } finally {
+      if (elapsedTimer) clearInterval(elapsedTimer);
     }
   }
 

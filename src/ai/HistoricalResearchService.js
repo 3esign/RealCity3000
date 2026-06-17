@@ -16,7 +16,7 @@ Provide a brief timeline (3 key milestones) and a short summary of former land u
     const userPrompt = `Research coordinates: LAT ${centerLat}, LNG ${centerLng}. Bounding box: South ${bbox.south.toFixed(4)}, West ${bbox.west.toFixed(4)}, North ${bbox.north.toFixed(4)}, East ${bbox.east.toFixed(4)}.`;
 
     try {
-      const resultText = await this.adapter.sendRequest(systemPrompt, userPrompt);
+      const resultText = await this.adapter.sendRequest(systemPrompt, userPrompt, { feature: 'history' });
       return resultText;
     } catch (err) {
       console.warn('Historical context fetch failed, using default timeline.', err);

@@ -15,6 +15,7 @@ import ThreeJSRenderer from './viz/ThreeJSRenderer.js';
 import MetricsDashboard from './viz/MetricsDashboard.js';
 import ExportService from './export/ExportService.js';
 import ValidationService from './export/ValidationService.js';
+import { FEATURE_LABELS, resolveFeatureConfig } from './ai/providerCapabilities.js';
 import { getMethodologyHTML } from './ui/AboutModal.js';
 import { PRESET_SCENARIOS } from './simulation/Parameters.js';
 import { initTooltips } from './ui/Tooltip.js';
@@ -34,6 +35,171 @@ const exportService = new ExportService();
 const validationService = new ValidationService();
 
 let simInterval = null;
+
+const AI_FEATURES = ['vision', 'mayor', 'history'];
+
+function getInputValue(id) {
+  const el = document.getElementById(id);
+  return el ? el.value : '';
+}
+
+function setInputValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.value = value;
+  }
+}
+
+function syncAiPanelFieldsFromState() {
+  const state = store.getState();
+  const universalMode = state.aiUseUniversal;
+
+  setInputValue('universal-api-key', state.aiKeys.universal || '');
+  setInputValue('vision-api-key', state.aiKeys.vision || state.aiKeys.universal || '');
+  setInputValue('mayor-api-key', state.aiKeys.mayor || state.aiKeys.universal || '');
+  setInputValue('history-api-key', state.aiKeys.history || state.aiKeys.universal || '');
+
+  setInputValue('universal-provider', state.aiProvider || 'openai');
+  setInputValue('vision-provider', state.visionProvider || state.aiProvider || 'openai');
+  setInputValue('mayor-provider', state.mayorProvider || state.aiProvider || 'openai');
+  setInputValue('history-provider', state.historyProvider || state.aiProvider || 'openai');
+
+  const universalKeyContainer = document.getElementById('single-key-container');
+  const splitKeyContainer = document.getElementById('split-keys-container');
+  if (universalKeyContainer && splitKeyContainer) {
+    if (universalMode) {
+      universalKeyContainer.classList.remove('hidden');
+      splitKeyContainer.classList.add('hidden');
+    } else {
+      universalKeyContainer.classList.add('hidden');
+      splitKeyContainer.classList.remove('hidden');
+    }
+  }
+}
+
+function buildAiStateForModeSwitch(universalMode) {
+  const state = store.getState();
+  const universalKey = getInputValue('universal-api-key');
+  const visionKey = getInputValue('vision-api-key');
+  const mayorKey = getInputValue('mayor-api-key');
+  const historyKey = getInputValue('history-api-key');
+
+  const universalProvider = getInputValue('universal-provider') || state.aiProvider || 'openai';
+  const visionProvider = getInputValue('vision-provider') || universalProvider;
+  const mayorProvider = getInputValue('mayor-provider') || universalProvider;
+  const historyProvider = getInputValue('history-provider') || universalProvider;
+
+  const fallbackKey = universalKey || visionKey || mayorKey || historyKey || state.aiKeys?.universal || '';
+  const fallbackProvider = universalProvider || visionProvider || mayorProvider || historyProvider || state.aiProvider || 'openai';
+
+  if (universalMode) {
+    return {
+      aiUseUniversal: true,
+      aiKeys: {
+        universal: universalKey || fallbackKey,
+        vision: visionKey || universalKey || fallbackKey,
+        mayor: mayorKey || universalKey || fallbackKey,
+        history: historyKey || universalKey || fallbackKey
+      },
+      aiProvider: universalProvider || fallbackProvider,
+      visionProvider,
+      mayorProvider,
+      historyProvider
+    };
+  }
+
+  if (state.aiUseUniversal) {
+    const seededKey = universalKey || fallbackKey;
+    const seededProvider = universalProvider || fallbackProvider;
+
+    return {
+      aiUseUniversal: false,
+      aiKeys: {
+        universal: seededKey,
+        vision: seededKey,
+        mayor: seededKey,
+        history: seededKey
+      },
+      aiProvider: seededProvider,
+      visionProvider: seededProvider,
+      mayorProvider: seededProvider,
+      historyProvider: seededProvider
+    };
+  }
+
+  return {
+    aiUseUniversal: false,
+    aiKeys: {
+      universal: universalKey || fallbackKey,
+      vision: visionKey || fallbackKey,
+      mayor: mayorKey || fallbackKey,
+      history: historyKey || fallbackKey
+    },
+    aiProvider: universalProvider || fallbackProvider,
+    visionProvider,
+    mayorProvider,
+    historyProvider
+  };
+}
+
+function saveAiConfigFromUI() {
+  store.updateState({
+    aiUseUniversal: document.getElementById('universal-key-toggle')?.checked ?? true,
+    aiKeys: {
+      universal: getInputValue('universal-api-key'),
+      vision: getInputValue('vision-api-key'),
+      mayor: getInputValue('mayor-api-key'),
+      history: getInputValue('history-api-key')
+    },
+    aiProvider: getInputValue('universal-provider') || 'openai',
+    visionProvider: getInputValue('vision-provider') || getInputValue('universal-provider') || 'openai',
+    mayorProvider: getInputValue('mayor-provider') || getInputValue('universal-provider') || 'openai',
+    historyProvider: getInputValue('history-provider') || getInputValue('universal-provider') || 'openai'
+  });
+
+  updateAiReadinessSummary();
+}
+
+function updateAiReadinessSummary() {
+  const summary = document.getElementById('ai-readiness-summary');
+  if (!summary) return;
+
+  const state = store.getState();
+  const modeLabel = state.aiUseUniversal ? 'Universal key mode' : 'Split key mode';
+
+  const renderRow = (feature) => {
+    const config = resolveFeatureConfig(state, feature);
+    const label = FEATURE_LABELS[feature] || feature;
+
+    let rowClass = 'ready';
+    let valueText = '';
+
+    if (config.provider === 'local') {
+      valueText = 'Local mathematical engine enabled';
+    } else if (!config.supported) {
+      rowClass = 'error';
+      valueText = `Provider "${config.provider}" cannot run ${label.toLowerCase()} here`;
+    } else if (!config.apiKey) {
+      rowClass = 'warning';
+      valueText = `Missing API key for "${config.provider}"`;
+    } else {
+      valueText = `Ready with ${config.provider}`;
+    }
+
+    return `<div class="ai-readiness-row ${rowClass}">
+      <span class="label">${label}</span>
+      <span class="value">${valueText}</span>
+    </div>`;
+  };
+
+  summary.innerHTML = `
+    <div class="ai-readiness-row ready">
+      <span class="label">Mode</span>
+      <span class="value">${modeLabel}</span>
+    </div>
+    ${AI_FEATURES.map(renderRow).join('')}
+  `;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   initApp();
@@ -93,36 +259,27 @@ function setupPhase1Listeners() {
   const singleKeyContainer = document.getElementById('single-key-container');
   const splitKeysContainer = document.getElementById('split-keys-container');
 
+  syncAiPanelFieldsFromState();
+  updateAiReadinessSummary();
+
   universalToggle.addEventListener('change', () => {
     const active = universalToggle.checked;
-    store.updateState({ aiUseUniversal: active });
-    if (active) {
-      singleKeyContainer.classList.remove('hidden');
-      splitKeysContainer.classList.add('hidden');
-    } else {
-      singleKeyContainer.classList.add('hidden');
-      splitKeysContainer.classList.remove('hidden');
-    }
+    store.updateState(buildAiStateForModeSwitch(active));
+    syncAiPanelFieldsFromState();
+    saveAiConfigFromUI();
   });
 
   // Key configurations on change
-  const saveKeys = () => {
-    store.updateState({
-      aiKeys: {
-        universal: document.getElementById('universal-api-key').value,
-        vision: document.getElementById('vision-api-key').value,
-        mayor: document.getElementById('mayor-api-key').value,
-        history: document.getElementById('history-api-key').value
-      },
-      aiProvider: document.getElementById('universal-provider').value
-    });
-  };
+  const saveKeys = () => saveAiConfigFromUI();
 
   document.getElementById('universal-api-key').addEventListener('input', saveKeys);
   document.getElementById('vision-api-key').addEventListener('input', saveKeys);
   document.getElementById('mayor-api-key').addEventListener('input', saveKeys);
   document.getElementById('history-api-key').addEventListener('input', saveKeys);
   document.getElementById('universal-provider').addEventListener('change', saveKeys);
+  document.getElementById('vision-provider').addEventListener('change', saveKeys);
+  document.getElementById('mayor-provider').addEventListener('change', saveKeys);
+  document.getElementById('history-provider').addEventListener('change', saveKeys);
 
   // Helper to log messages in the loading terminal console
   function logToLoader(message, type = 'info') {
@@ -170,20 +327,24 @@ function setupPhase1Listeners() {
     // 3. Run Satellite Spectrum Analysis first if enabled
     let visionResult = null;
     if (state.useAISatelliteVision) {
+      logToLoader('<br>=====================================', 'info');
+      logToLoader('PHASE 2: AI Satellite Vision Analysis', 'info');
+      logToLoader('=====================================', 'info');
       statusText.textContent = 'Analyzing satellite spectrum for natural and brownfield layouts...';
       logToLoader('Requesting ESRI static satellite tile for analysis...', 'info');
       try {
         const esriStaticUrl = `https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=${state.bbox.west},${state.bbox.south},${state.bbox.east},${state.bbox.north}&bboxSR=4326&imageSR=4326&size=500,500&format=png&f=image`;
         logToLoader(`Static Satellite URL generated. Length: ${esriStaticUrl.length} chars.`, 'info');
         
-        const provider = state.aiProvider;
-        const hasKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.vision;
-        if (provider === 'local') {
+        const visionConfig = resolveFeatureConfig(state, 'vision');
+        if (visionConfig.provider === 'local') {
           logToLoader('Local Mathematical Engine selected for Vision Service. Running local rules...', 'info');
-        } else if (hasKey) {
-          logToLoader(`Preparing request to AI Vision Service using provider "${provider}"...`, 'info');
+        } else if (!visionConfig.supported) {
+          logToLoader(`Provider "${visionConfig.provider}" does not support visual intelligence. Falling back to local terrain heuristics.`, 'warn');
+        } else if (visionConfig.apiKey) {
+          logToLoader(`Preparing request to AI Vision Service using provider "${visionConfig.provider}"...`, 'info');
         } else {
-          logToLoader(`No API key provided for Vision Service with provider "${provider}".`, 'warn');
+          logToLoader(`No API key provided for Vision Service with provider "${visionConfig.provider}". Falling back to local terrain heuristics.`, 'warn');
         }
         
         visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl, logToLoader);
@@ -206,6 +367,9 @@ function setupPhase1Listeners() {
     }
 
     // 4. Grid Generation (Satellite base first, then overlay OSM highways & building footprints)
+    logToLoader('<br>=====================================', 'info');
+    logToLoader('PHASE 3: Grid Assembly & Rasterization', 'info');
+    logToLoader('=====================================', 'info');
     statusText.textContent = 'Rasterizing cell connectivity and overlaying OSM vectors...';
     logToLoader('Rasterizing simulation grid cells and geometry networks...', 'info');
     const grid = gridGenerator.generateGrid(
@@ -288,6 +452,9 @@ function setupPhase1Listeners() {
       let osmFailed = false;
 
       if (state.fetchOSMData) {
+        logToLoader('=====================================', 'info');
+        logToLoader('PHASE 1: OpenStreetMap Extraction', 'info');
+        logToLoader('=====================================', 'info');
         statusText.textContent = 'Querying OpenStreetMap Overpass API...';
         logToLoader('Querying OpenStreetMap Overpass servers...', 'info');
         try {
@@ -305,42 +472,31 @@ function setupPhase1Listeners() {
 
       if (osmFailed) {
         logToLoader('All Overpass API attempts failed. OSM server is overloaded or timed out.', 'error');
-        statusText.textContent = 'OSM Query Failed. Select action to proceed:';
-
-        const btnWrapper = document.createElement('div');
-        btnWrapper.className = 'action-buttons-wrapper';
-        btnWrapper.style.cssText = 'margin-top: 16px; display: flex; gap: 12px; justify-content: center;';
-
-        const retryBtn = document.createElement('button');
-        retryBtn.className = 'btn btn-accent retry-extract-btn';
-        retryBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
-        retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry OSM';
-        retryBtn.addEventListener('click', () => {
-          btnWrapper.remove();
-          extractBtn.click();
-        });
-
-        const bypassBtn = document.createElement('button');
-        bypassBtn.className = 'btn btn-secondary bypass-ai-btn';
-        bypassBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
         if (state.useAISatelliteVision) {
-          bypassBtn.innerHTML = '<i class="fa-solid fa-brain"></i> Bypass using AI Satellite';
+          logToLoader('AI Satellite Vision is enabled. Automatically falling through to pure AI pipeline...', 'warn');
         } else {
+          statusText.textContent = 'OSM Query Failed. Select action to proceed:';
+
+          const btnWrapper = document.createElement('div');
+          btnWrapper.className = 'action-buttons-wrapper';
+          btnWrapper.style.cssText = 'margin-top: 16px; display: flex; gap: 12px; justify-content: center;';
+
+          const retryBtn = document.createElement('button');
+          retryBtn.className = 'btn btn-accent retry-extract-btn';
+          retryBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
+          retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry OSM';
+          retryBtn.addEventListener('click', () => {
+            btnWrapper.remove();
+            extractBtn.click();
+          });
+
+          const bypassBtn = document.createElement('button');
+          bypassBtn.className = 'btn btn-secondary bypass-ai-btn';
+          bypassBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
           bypassBtn.innerHTML = '<i class="fa-solid fa-network-wired"></i> Bypass using Procedural Environment';
-        }
-        bypassBtn.addEventListener('click', async () => {
-          btnWrapper.remove();
-          if (logContainer) logContainer.innerHTML = '';
-          if (state.useAISatelliteVision) {
-            logToLoader('User selected OSM Bypass. Initializing pure Satellite Simulation...', 'warn');
-            try {
-              await completeInitialization({ buildings: [], roads: [], water: [] }, null, true);
-            } catch (bypassErr) {
-              console.error('Bypass initialization error:', bypassErr);
-              statusText.textContent = `Bypass Error: ${bypassErr.message}`;
-              logToLoader(`Bypass failed: ${bypassErr.message}`, 'error');
-            }
-          } else {
+          bypassBtn.addEventListener('click', async () => {
+            btnWrapper.remove();
+            if (logContainer) logContainer.innerHTML = '';
             logToLoader('User selected OSM Bypass. Generating randomized procedural environment...', 'warn');
             try {
               const proceduralData = overpassService.generateProceduralElements(state.bbox);
@@ -350,28 +506,28 @@ function setupPhase1Listeners() {
               statusText.textContent = `Bypass Error: ${bypassErr.message}`;
               logToLoader(`Bypass failed: ${bypassErr.message}`, 'error');
             }
-          }
-          if (!loader.querySelector('.action-buttons-wrapper')) {
+            if (!loader.querySelector('.action-buttons-wrapper')) {
+              loader.classList.add('hidden');
+            }
+          });
+
+          const cancelBtn = document.createElement('button');
+          cancelBtn.className = 'btn btn-secondary cancel-extract-btn';
+          cancelBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer; background-color: #1e293b; color: #94a3b8; border: 1px solid #334155;';
+          cancelBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel & Go Back';
+          cancelBtn.addEventListener('click', () => {
+            btnWrapper.remove();
             loader.classList.add('hidden');
-          }
-        });
+          });
 
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'btn btn-secondary cancel-extract-btn';
-        cancelBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer; background-color: #1e293b; color: #94a3b8; border: 1px solid #334155;';
-        cancelBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel & Go Back';
-        cancelBtn.addEventListener('click', () => {
-          btnWrapper.remove();
-          loader.classList.add('hidden');
-        });
-
-        btnWrapper.appendChild(retryBtn);
-        btnWrapper.appendChild(bypassBtn);
-        btnWrapper.appendChild(cancelBtn);
-        
-        loader.querySelector('.loading-content, .loader-container, div')?.appendChild(btnWrapper)
-          || loader.appendChild(btnWrapper);
-        return; // Exit click handler - loader remains visible with buttons
+          btnWrapper.appendChild(retryBtn);
+          btnWrapper.appendChild(bypassBtn);
+          btnWrapper.appendChild(cancelBtn);
+          
+          loader.querySelector('.loading-content, .loader-container, div')?.appendChild(btnWrapper)
+            || loader.appendChild(btnWrapper);
+          return; // Exit click handler - loader remains visible with buttons
+        }
       }
 
       if (!state.fetchOSMData) {

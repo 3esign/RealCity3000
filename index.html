@@ -117,20 +117,49 @@
               <div class="input-wrapper">
                 <input type="password" id="vision-api-key" placeholder="Vision Key..." data-tooltip="API Key for Satellite computer vision classification model" />
               </div>
+              <select id="vision-provider" class="dropdown-input" data-tooltip="Provider used for satellite vision. Pick a model that supports image analysis.">
+                <option value="local">Local Mathematical Engine (No API Key)</option>
+                <option value="openrouter">OpenRouter (DeepSeek/Llama/Mistral)</option>
+                <option value="openai">OpenAI (GPT-4o-mini)</option>
+                <option value="anthropic">Anthropic (Claude 3.5 Haiku)</option>
+                <option value="gemini">Google Gemini (Gemini 2.5 Flash)</option>
+                <option value="groq">Groq (Llama 3)</option>
+                <option value="deepseek">DeepSeek API (V3/R1, falls back for vision)</option>
+              </select>
             </div>
             <div class="key-field">
               <label>AI Mayor (Planning) Key</label>
               <div class="input-wrapper">
                 <input type="password" id="mayor-api-key" placeholder="Mayor Key..." data-tooltip="API Key for Mayor agent governance policy decision making" />
               </div>
+              <select id="mayor-provider" class="dropdown-input" data-tooltip="Provider used for the AI Mayor planning agent.">
+                <option value="local">Local Mathematical Engine (No API Key)</option>
+                <option value="openrouter">OpenRouter (DeepSeek/Llama/Mistral)</option>
+                <option value="openai">OpenAI (GPT-4o-mini)</option>
+                <option value="anthropic">Anthropic (Claude 3.5 Haiku)</option>
+                <option value="gemini">Google Gemini (Gemini 2.5 Flash)</option>
+                <option value="groq">Groq (Llama 3)</option>
+                <option value="deepseek">DeepSeek API (V3/R1)</option>
+              </select>
             </div>
             <div class="key-field">
               <label>Historical Research Key</label>
               <div class="input-wrapper">
                 <input type="password" id="history-api-key" placeholder="History Key..." data-tooltip="API Key for fetching location-specific urban history research" />
               </div>
+              <select id="history-provider" class="dropdown-input" data-tooltip="Provider used for historical research lookups.">
+                <option value="local">Local Mathematical Engine (No API Key)</option>
+                <option value="openrouter">OpenRouter (DeepSeek/Llama/Mistral)</option>
+                <option value="openai">OpenAI (GPT-4o-mini)</option>
+                <option value="anthropic">Anthropic (Claude 3.5 Haiku)</option>
+                <option value="gemini">Google Gemini (Gemini 2.5 Flash)</option>
+                <option value="groq">Groq (Llama 3)</option>
+                <option value="deepseek">DeepSeek API (V3/R1)</option>
+              </select>
             </div>
           </div>
+
+          <div id="ai-readiness-summary" class="ai-readiness-summary" data-tooltip="Shows whether your selected AI provider and key are ready for vision, mayor, and history features."></div>
         </div>
 
         <div class="sidebar-section">

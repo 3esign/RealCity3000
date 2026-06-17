@@ -140,20 +140,21 @@ RealCity3000 cross-validates deterministic OSM cadastral vectors (Source 1) with
       // Simple systems dynamics calculation
       let totalPop = 0;
       let vacant = 0;
-      let totalC = 0, totalI = 0;
+      let totalC = 0, totalI = 0, totalInst = 0;
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
           const c = localGrid[y][x];
           if (c.type.startsWith('RESIDENTIAL')) { totalPop += c.population; }
           else if (c.type === 'COMMERCIAL') totalC++;
           else if (c.type === 'INDUSTRIAL') totalI++;
+          else if (c.type === 'INSTITUTIONAL') totalInst++;
           else if (c.type === 'VACANT') vacant++;
         }
       }
       currentPop = totalPop;
       vacantCount = vacant;
 
-      const jobCapacity = (totalC * 5) + (totalI * 8);
+      const jobCapacity = (totalC * 5) + (totalI * 8) + (totalInst * 4);
       const housingGap = jobCapacity - totalPop;
 
       const rDelta = (housingGap * 0.015) - (params.taxRate - 15) * 0.4 + params.populationGrowth * 1.2 + params.economicGrowth * 0.6;

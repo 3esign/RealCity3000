@@ -1,4 +1,5 @@
 import store from '../state/store.js';
+import { resolveFeatureConfig } from './providerCapabilities.js';
 
 export class AIProviderAdapter {
   constructor() {}
@@ -9,13 +10,19 @@ export class AIProviderAdapter {
     return jsonMatch ? jsonMatch[0] : text;
   }
 
-  async sendRequest(systemPrompt, userPrompt) {
+  async sendRequest(systemPrompt, userPrompt, options = {}) {
+    const feature = options.feature || 'mayor';
     const state = store.getState();
-    const apiKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.mayor;
-    const provider = state.aiProvider;
+    const config = resolveFeatureConfig(state, feature);
+    const { apiKey, provider, supported } = config;
 
     if (provider === 'local' || !apiKey) {
       // Local mathematical engine fallback (mock policy payload)
+      return this.generateMockMayorPayload();
+    }
+
+    if (!supported) {
+      console.warn(`[AIProviderAdapter] Provider "${provider}" does not support feature "${feature}". Falling back to local policy payload.`);
       return this.generateMockMayorPayload();
     }
 

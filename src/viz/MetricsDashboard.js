@@ -12,6 +12,7 @@ export class MetricsDashboard {
       R: '#ffa500',
       C: '#00d4ff',
       I: '#8b5cf6',
+      Inst: '#f43f5e',
       other: '#475569'
     };
   }
@@ -98,7 +99,7 @@ export class MetricsDashboard {
     const grid = state.grid;
     if (!grid) return;
 
-    let r = 0, c = 0, i = 0, vacant = 0;
+    let r = 0, c = 0, i = 0, inst = 0, vacant = 0;
     const h = grid.length;
     const w = grid[0].length;
 
@@ -108,15 +109,17 @@ export class MetricsDashboard {
         if (type.startsWith('RESIDENTIAL')) r++;
         else if (type === 'COMMERCIAL') c++;
         else if (type === 'INDUSTRIAL') i++;
+        else if (type === 'INSTITUTIONAL') inst++;
         else vacant++;
       }
     }
 
-    const total = r + c + i + vacant;
+    const total = r + c + i + inst + vacant;
     const slices = [
       { val: r, color: this.colors.R, label: 'Res' },
       { val: c, color: this.colors.C, label: 'Com' },
       { val: i, color: this.colors.I, label: 'Ind' },
+      { val: inst, color: this.colors.Inst, label: 'Inst' },
       { val: vacant, color: this.colors.other, label: 'Vac' }
     ];
 
