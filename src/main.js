@@ -212,6 +212,7 @@ function initApp() {
   // 1. Initialize Leaflet Selector Map
   mapSelector = new MapSelector();
   dashboard = new MetricsDashboard();
+  dashboard.initChartTooltips();
 
   // 2. Setup Phase 1 UI Listeners
   setupPhase1Listeners();
@@ -472,62 +473,76 @@ function setupPhase1Listeners() {
 
       if (osmFailed) {
         logToLoader('All Overpass API attempts failed. OSM server is overloaded or timed out.', 'error');
-        if (state.useAISatelliteVision) {
-          logToLoader('AI Satellite Vision is enabled. Automatically falling through to pure AI pipeline...', 'warn');
-        } else {
-          statusText.textContent = 'OSM Query Failed. Select action to proceed:';
+        statusText.textContent = 'OSM Query Failed. Select action to proceed:';
 
-          const btnWrapper = document.createElement('div');
-          btnWrapper.className = 'action-buttons-wrapper';
-          btnWrapper.style.cssText = 'margin-top: 16px; display: flex; gap: 12px; justify-content: center;';
+        const btnWrapper = document.createElement('div');
+        btnWrapper.className = 'action-buttons-wrapper';
+        btnWrapper.style.cssText = 'margin-top: 16px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;';
 
-          const retryBtn = document.createElement('button');
-          retryBtn.className = 'btn btn-accent retry-extract-btn';
-          retryBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
-          retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry OSM';
-          retryBtn.addEventListener('click', () => {
-            btnWrapper.remove();
-            extractBtn.click();
-          });
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'btn btn-accent retry-extract-btn';
+        retryBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
+        retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry OSM';
+        retryBtn.addEventListener('click', () => {
+          btnWrapper.remove();
+          extractBtn.click();
+        });
 
-          const bypassBtn = document.createElement('button');
-          bypassBtn.className = 'btn btn-secondary bypass-ai-btn';
-          bypassBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
-          bypassBtn.innerHTML = '<i class="fa-solid fa-network-wired"></i> Bypass using Procedural Environment';
-          bypassBtn.addEventListener('click', async () => {
-            btnWrapper.remove();
-            if (logContainer) logContainer.innerHTML = '';
-            logToLoader('User selected OSM Bypass. Generating randomized procedural environment...', 'warn');
-            try {
-              const proceduralData = overpassService.generateProceduralElements(state.bbox);
-              await completeInitialization(proceduralData, null, true);
-            } catch (bypassErr) {
-              console.error('Bypass initialization error:', bypassErr);
-              statusText.textContent = `Bypass Error: ${bypassErr.message}`;
-              logToLoader(`Bypass failed: ${bypassErr.message}`, 'error');
-            }
-            if (!loader.querySelector('.action-buttons-wrapper')) {
-              loader.classList.add('hidden');
-            }
-          });
+        const hardResetBtn = document.createElement('button');
+        hardResetBtn.className = 'btn btn-accent retry-extract-btn';
+        hardResetBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer; background: linear-gradient(135deg, #ef4444, #dc2626);';
+        hardResetBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Clear Cache & Retry';
+        hardResetBtn.addEventListener('click', () => {
+          // Purge all OSM caches from localStorage
+          const keysToRemove = [];
+          for (let k = 0; k < localStorage.length; k++) {
+            const key = localStorage.key(k);
+            if (key && key.startsWith('osm_cache_')) keysToRemove.push(key);
+          }
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+          logToLoader(`Purged ${keysToRemove.length} cached OSM entries from localStorage.`, 'warn');
+          btnWrapper.remove();
+          extractBtn.click();
+        });
 
-          const cancelBtn = document.createElement('button');
-          cancelBtn.className = 'btn btn-secondary cancel-extract-btn';
-          cancelBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer; background-color: #1e293b; color: #94a3b8; border: 1px solid #334155;';
-          cancelBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel & Go Back';
-          cancelBtn.addEventListener('click', () => {
-            btnWrapper.remove();
+        const bypassBtn = document.createElement('button');
+        bypassBtn.className = 'btn btn-secondary bypass-ai-btn';
+        bypassBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
+        bypassBtn.innerHTML = '<i class="fa-solid fa-network-wired"></i> Bypass (Procedural)';
+        bypassBtn.addEventListener('click', async () => {
+          btnWrapper.remove();
+          if (logContainer) logContainer.innerHTML = '';
+          logToLoader('User selected OSM Bypass. Generating randomized procedural environment...', 'warn');
+          try {
+            const proceduralData = overpassService.generateProceduralElements(state.bbox);
+            await completeInitialization(proceduralData, null, true);
+          } catch (bypassErr) {
+            console.error('Bypass initialization error:', bypassErr);
+            statusText.textContent = `Bypass Error: ${bypassErr.message}`;
+            logToLoader(`Bypass failed: ${bypassErr.message}`, 'error');
+          }
+          if (!loader.querySelector('.action-buttons-wrapper')) {
             loader.classList.add('hidden');
-          });
+          }
+        });
 
-          btnWrapper.appendChild(retryBtn);
-          btnWrapper.appendChild(bypassBtn);
-          btnWrapper.appendChild(cancelBtn);
-          
-          loader.querySelector('.loading-content, .loader-container, div')?.appendChild(btnWrapper)
-            || loader.appendChild(btnWrapper);
-          return; // Exit click handler - loader remains visible with buttons
-        }
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn btn-secondary cancel-extract-btn';
+        cancelBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer; background-color: #1e293b; color: #94a3b8; border: 1px solid #334155;';
+        cancelBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel & Go Back';
+        cancelBtn.addEventListener('click', () => {
+          btnWrapper.remove();
+          loader.classList.add('hidden');
+        });
+
+        btnWrapper.appendChild(retryBtn);
+        btnWrapper.appendChild(hardResetBtn);
+        btnWrapper.appendChild(bypassBtn);
+        btnWrapper.appendChild(cancelBtn);
+        
+        loader.querySelector('.loading-content, .loader-container, div')?.appendChild(btnWrapper)
+          || loader.appendChild(btnWrapper);
+        return; // Exit click handler - loader remains visible with buttons
       }
 
       if (!state.fetchOSMData) {

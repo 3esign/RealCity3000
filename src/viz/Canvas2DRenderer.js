@@ -86,7 +86,76 @@ export class Canvas2DRenderer {
     window.addEventListener('mouseup', () => {
       this.isDragging = false;
     });
+
+    // Cell hover tooltip
+    this.hoverTooltip = document.createElement('div');
+    this.hoverTooltip.className = 'cell-hover-tooltip';
+    this.hoverTooltip.style.cssText = `
+      position: fixed; display: none; pointer-events: none; z-index: 9999;
+      background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 8px; padding: 10px 14px; font-size: 11px; color: #e2e8f0;
+      font-family: 'Inter', sans-serif; backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5); min-width: 160px; line-height: 1.6;
+    `;
+    document.body.appendChild(this.hoverTooltip);
+
+    this.canvas.addEventListener('mousemove', (e) => {
+      if (this.isDragging) {
+        this.hoverTooltip.style.display = 'none';
+        return;
+      }
+
+      const state = store.getState();
+      const grid = state.grid;
+      if (!grid) return;
+
+      const rect = this.canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const w = state.gridWidth;
+      const h = state.gridHeight;
+      const cellW = (this.canvas.width * 0.75) / w;
+      const cellH = (this.canvas.height * 0.75) / h;
+      const size = Math.min(cellW, cellH) * this.zoom;
+
+      const gridX = Math.floor((mouseX - this.panX) / size);
+      const gridY = Math.floor((mouseY - this.panY) / size);
+
+      if (gridX >= 0 && gridX < w && gridY >= 0 && gridY < h) {
+        const cell = grid[gridY][gridX];
+        const zoneLabel = cell.type.replace(/_/g, ' ');
+        const densityBar = '█'.repeat(Math.round(cell.density * 5)) + '░'.repeat(5 - Math.round(cell.density * 5));
+        
+        this.hoverTooltip.innerHTML = `
+          <div style="color: #00f0ff; font-weight: 600; margin-bottom: 4px; font-size: 12px;">Cell [${gridX}, ${gridY}]</div>
+          <div><span style="color: #94a3b8;">Zone:</span> <span style="color: ${this.colors[cell.type] || '#e2e8f0'}; font-weight: 600;">${zoneLabel}</span></div>
+          <div><span style="color: #94a3b8;">Density:</span> ${densityBar} ${(cell.density * 100).toFixed(0)}%</div>
+          <div><span style="color: #94a3b8;">Land Value:</span> <span style="color: #eab308;">${cell.landValue?.toFixed(1) ?? '0.0'}</span></div>
+          <div><span style="color: #94a3b8;">Pollution:</span> <span style="color: ${cell.pollution > 0.5 ? '#ef4444' : '#22c55e'};">${(cell.pollution * 100).toFixed(0)}%</span></div>
+          <div><span style="color: #94a3b8;">Access:</span> ${(cell.accessibility * 100).toFixed(0)}%</div>
+          ${cell.population ? `<div><span style="color: #94a3b8;">Pop:</span> ${cell.population}</div>` : ''}
+        `;
+        this.hoverTooltip.style.display = 'block';
+
+        let tx = e.clientX + 16;
+        let ty = e.clientY + 16;
+        const tw = this.hoverTooltip.offsetWidth;
+        const th = this.hoverTooltip.offsetHeight;
+        if (tx + tw > window.innerWidth - 10) tx = e.clientX - tw - 16;
+        if (ty + th > window.innerHeight - 10) ty = e.clientY - th - 16;
+        this.hoverTooltip.style.left = `${tx}px`;
+        this.hoverTooltip.style.top = `${ty}px`;
+      } else {
+        this.hoverTooltip.style.display = 'none';
+      }
+    });
+
+    this.canvas.addEventListener('mouseleave', () => {
+      this.hoverTooltip.style.display = 'none';
+    });
   }
+
 
   draw() {
     const state = store.getState();

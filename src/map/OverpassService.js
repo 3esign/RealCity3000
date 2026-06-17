@@ -99,6 +99,10 @@ export class OverpassService {
         const reason = err.name === 'AbortError' ? 'Timeout exceeded' : err.message;
         log(`Proxy/Mirror ${host} failed: ${reason}`, 'warn');
         lastError = err;
+        // Brief cooldown before next mirror to prevent rate limiting
+        if (i < targets.length - 1) {
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
     }
 

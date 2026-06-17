@@ -194,11 +194,16 @@ export class MetricsDashboard {
     const pointsCount = history.length;
     const stepX = pointsCount > 1 ? w / (pointsCount - 1) : w;
 
+    // Store point positions for hover
+    this._timelinePoints = [];
+
     history.forEach((pt, idx) => {
       const px = idx * stepX;
       // Map range to height (flip Y)
       const py = h - 10 - ((pt.population - minVal) / range) * (h - 20);
       
+      this._timelinePoints.push({ x: px, y: py, step: idx, population: pt.population, density: pt.urbanDensityPct, value: pt.averageLandValue, pollution: pt.pollutionIndex });
+
       if (idx === 0) {
         ctx.moveTo(px, py);
       } else {
@@ -213,6 +218,140 @@ export class MetricsDashboard {
       ctx.lineTo(0, h);
       ctx.fillStyle = 'rgba(0, 240, 255, 0.04)';
       ctx.fill();
+    }
+  }
+
+  initChartTooltips() {
+    // Create shared chart tooltip element
+    this.chartTooltip = document.createElement('div');
+    this.chartTooltip.className = 'chart-hover-tooltip';
+    this.chartTooltip.style.cssText = `
+      position: fixed; display: none; pointer-events: none; z-index: 9999;
+      background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 8px; padding: 8px 12px; font-size: 11px; color: #e2e8f0;
+      font-family: 'Inter', sans-serif; backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5); line-height: 1.5;
+    `;
+    document.body.appendChild(this.chartTooltip);
+
+    // Donut chart hover
+    if (this.distCanvas) {
+      this.distCanvas.addEventListener('mousemove', (e) => {
+        const rect = this.distCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        
+        // Check if mouse is over donut region
+        const cx = 65, cy = 65, radius = 45;
+        const dx = mx - cx, dy = my - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist > radius - 16 && dist < radius + 16) {
+          const angle = Math.atan2(dy, dx);
+          const normAngle = angle < -Math.PI / 2 ? angle + Math.PI * 2.5 : angle + Math.PI / 2;
+          
+          const state = store.getState();
+          const grid = state.grid;
+          if (!grid) return;
+          
+          let r = 0, c = 0, ind = 0, inst = 0, vacant = 0;
+          const h = grid.length, w = grid[0].length;
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const type = grid[y][x].type;
+              if (type.startsWith('RESIDENTIAL')) r++;
+              else if (type === 'COMMERCIAL') c++;
+              else if (type === 'INDUSTRIAL') ind++;
+              else if (type === 'INSTITUTIONAL') inst++;
+              else vacant++;
+            }
+          }
+          const total = r + c + ind + inst + vacant;
+          const slices = [
+            { val: r, color: this.colors.R, label: 'Residential', count: r },
+            { val: c, color: this.colors.C, label: 'Commercial', count: c },
+            { val: ind, color: this.colors.I, label: 'Industrial', count: ind },
+            { val: inst, color: this.colors.Inst, label: 'Institutional', count: inst },
+            { val: vacant, color: this.colors.other, label: 'Vacant/Other', count: vacant }
+          ];
+
+          let cumAngle = 0;
+          let hoveredSlice = null;
+          for (const s of slices) {
+            if (s.val === 0) continue;
+            const sliceAngle = (s.val / total) * (Math.PI * 2);
+            if (normAngle >= cumAngle && normAngle < cumAngle + sliceAngle) {
+              hoveredSlice = s;
+              break;
+            }
+            cumAngle += sliceAngle;
+          }
+
+          if (hoveredSlice) {
+            const pct = ((hoveredSlice.val / total) * 100).toFixed(1);
+            this.chartTooltip.innerHTML = `
+              <div style="color: ${hoveredSlice.color}; font-weight: 600;">${hoveredSlice.label}</div>
+              <div>${pct}% (${hoveredSlice.count} cells)</div>
+            `;
+            this.chartTooltip.style.display = 'block';
+          }
+        } else {
+          this.chartTooltip.style.display = 'none';
+        }
+
+        let tx = e.clientX + 14;
+        let ty = e.clientY + 14;
+        if (tx + 150 > window.innerWidth) tx = e.clientX - 160;
+        if (ty + 60 > window.innerHeight) ty = e.clientY - 70;
+        this.chartTooltip.style.left = `${tx}px`;
+        this.chartTooltip.style.top = `${ty}px`;
+      });
+
+      this.distCanvas.addEventListener('mouseleave', () => {
+        this.chartTooltip.style.display = 'none';
+      });
+    }
+
+    // Timeline chart hover
+    if (this.timeCanvas) {
+      this.timeCanvas.addEventListener('mousemove', (e) => {
+        if (!this._timelinePoints || this._timelinePoints.length === 0) return;
+        
+        const rect = this.timeCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        
+        // Find nearest point
+        let nearest = this._timelinePoints[0];
+        let minDist = Infinity;
+        for (const pt of this._timelinePoints) {
+          const d = Math.abs(pt.x - mx);
+          if (d < minDist) { minDist = d; nearest = pt; }
+        }
+
+        if (minDist < 30) {
+          this.chartTooltip.innerHTML = `
+            <div style="color: #00f0ff; font-weight: 600;">Step ${nearest.step}</div>
+            <div>Pop: ${nearest.population}</div>
+            <div>Density: ${nearest.density?.toFixed(1) ?? 0}%</div>
+            <div>Value: ${nearest.value?.toFixed(1) ?? 0}</div>
+            <div>Pollution: ${nearest.pollution?.toFixed(3) ?? 0}</div>
+          `;
+          this.chartTooltip.style.display = 'block';
+        } else {
+          this.chartTooltip.style.display = 'none';
+        }
+
+        let tx = e.clientX + 14;
+        let ty = e.clientY + 14;
+        if (tx + 150 > window.innerWidth) tx = e.clientX - 160;
+        if (ty + 60 > window.innerHeight) ty = e.clientY - 70;
+        this.chartTooltip.style.left = `${tx}px`;
+        this.chartTooltip.style.top = `${ty}px`;
+      });
+
+      this.timeCanvas.addEventListener('mouseleave', () => {
+        this.chartTooltip.style.display = 'none';
+      });
     }
   }
 }
