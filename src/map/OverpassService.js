@@ -332,11 +332,19 @@ out geom;`;
                            ['river', 'stream', 'canal', 'ditch', 'drain', 'riverbank'].includes(tags.waterway) || 
                            ['river', 'stream', 'canal', 'ditch', 'drain', 'riverbank'].includes(tags.water) || 
                            ['river', 'stream', 'canal', 'ditch', 'drain', 'riverbank'].includes(tags.natural);
+        
+        // Determine if it is a polygon (e.g. riverbank, lake, basin) or a line (e.g. river, stream)
+        const isPolygon = tags.waterway === 'riverbank' || 
+                          tags.natural === 'water' || 
+                          tags.landuse === 'basin' || 
+                          tags.landuse === 'reservoir';
+
         water.push({
           id: element.id,
           coords: coords,
           type: type,
-          isWaterway: isWaterway
+          isWaterway: isWaterway,
+          isPolygon: isPolygon
         });
       }
     });

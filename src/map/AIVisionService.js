@@ -387,9 +387,7 @@ Ensure you classify the entire visible area logically and realistically based on
     } finally {
       if (elapsedTimer) clearInterval(elapsedTimer);
     }
-  }
-
-  generateMockAIResponse(w, h) {
+  }  generateMockAIResponse(w, h) {
     const brownfields = [];
     const vacantLots = [];
     const denseForests = [];
@@ -399,33 +397,13 @@ Ensure you classify the entire visible area logically and realistically based on
     const commercial = [];
     const industrial = [];
     
-    // Seed major roads (horizontal & vertical lines in 100x100 space)
-    roads.push([0, 50, 100, 50]);
-    roads.push([50, 0, 50, 100]);
-
-    // Seed residential blocks (bounding boxes [minX, minY, maxX, maxY])
-    residential.push([55, 55, 90, 90]);
-
-    // Seed commercial around central crossroads
-    commercial.push([47, 47, 53, 53]);
-
-    // Seed industrial near brownfield
-    industrial.push([35, 10, 48, 35]);
-
-    // Seed dense forests
-    denseForests.push([70, 20, 80, 30]);
-
-    // Seed brownfields
-    brownfields.push([28, 63, 32, 67]);
-
-    // Seed vacant lots (points)
-    vacantLots.push([45, 20]);
-    vacantLots.push([20, 45]);
-    vacantLots.push([80, 80]);
-    vacantLots.push([15, 85]);
+    // We intentionally return empty arrays here. 
+    // Procedural city generation is handled by OverpassService's procedural 
+    // generator if no OSM data is available. Returning mock vision data 
+    // here causes it to falsely overlay on top of real OSM maps.
 
     return {
-      reasoning: "Local mock generator: Seeded river running center-left, main crossroads extending from center [50, 50], residential cluster in bottom-right [55..90], industrial node top-left, and dense forest patch top-right.",
+      reasoning: "Local mock generator: Vision API is offline. Returning empty overlays so as not to interfere with OpenStreetMap vector extraction.",
       brownfields,
       vacantLots,
       denseForests,
@@ -437,4 +415,5 @@ Ensure you classify the entire visible area logically and realistically based on
     };
   }
 }
+
 export default AIVisionService;

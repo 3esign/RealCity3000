@@ -199,10 +199,7 @@ export class GridGenerator {
 
     // 1. Rasterize Water
     parsedData.water.forEach(w => {
-      const isClosed = w.coords.length > 2 &&
-                       w.coords[0].lat === w.coords[w.coords.length - 1].lat &&
-                       w.coords[0].lng === w.coords[w.coords.length - 1].lng;
-      const isLine = !isClosed;
+      const isLine = !w.isPolygon;
 
       if (isLine) {
         const typeStr = String(w.type).toLowerCase();
