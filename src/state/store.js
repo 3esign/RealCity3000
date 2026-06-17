@@ -9,6 +9,10 @@ class Store {
       bbox: null, // { south, west, north, east }
       aspectRatio: 1.0,
       
+      // Data Sources configuration
+      fetchOSMData: true,
+      useAISatelliteVision: true,
+      
       // Data Extracted
       osmRawData: null,
       buildings: [], // Parsed building outline polygons

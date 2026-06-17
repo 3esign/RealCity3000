@@ -66,10 +66,26 @@
               <span class="label">Performance Status: Optimal</span>
             </div>
           </div>
+        <div class="sidebar-section">
+          <h3 data-tooltip="Data Sources: Configure which data streams to query. Disabling both initiates a fully randomized procedural sandbox environment."><i class="fa-solid fa-network-wired"></i> 3. Data Sources</h3>
+          <div class="key-mode-toggle" style="margin-bottom: 8px;" data-tooltip="Extract highways, buildings, and water geometries from OpenStreetMap public servers.">
+            <label class="toggle-switch">
+              <input type="checkbox" id="source-osm-toggle" checked />
+              <span class="slider-toggle"></span>
+            </label>
+            <span>Fetch OpenStreetMap (OSM)</span>
+          </div>
+          <div class="key-mode-toggle" data-tooltip="Run satellite computer vision classifications on ESRI tiles (requires AI API key).">
+            <label class="toggle-switch">
+              <input type="checkbox" id="source-ai-toggle" checked />
+              <span class="slider-toggle"></span>
+            </label>
+            <span>Use AI Satellite Vision</span>
+          </div>
         </div>
 
         <div class="sidebar-section">
-          <h3 data-tooltip="AI Inference: Toggle between universal or split API keys to enable Satellite computer vision analysis and AI Mayor planning."><i class="fa-solid fa-key"></i> 3. AI Inference (Optional)</h3>
+          <h3 data-tooltip="AI Inference: Toggle between universal or split API keys to enable Satellite computer vision analysis and AI Mayor planning."><i class="fa-solid fa-key"></i> 4. AI Inference (Optional)</h3>
           <div class="key-mode-toggle" data-tooltip="Toggle between using a single API key for all AI features, or separate specialized keys.">
             <label class="toggle-switch">
               <input type="checkbox" id="universal-key-toggle" checked />

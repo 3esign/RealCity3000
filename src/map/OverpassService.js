@@ -217,49 +217,78 @@ out geom;`;
   }
 
   generateProceduralElements(bbox) {
+    const styles = ['grid', 'radial', 'organic', 'sprawl'];
+    const chosenStyle = styles[Math.floor(Math.random() * styles.length)];
+    console.log(`[OverpassService] Generating procedural elements with style: ${chosenStyle}`);
+    
+    if (chosenStyle === 'grid') {
+      return this.generateProceduralGrid(bbox);
+    } else if (chosenStyle === 'radial') {
+      return this.generateProceduralRadial(bbox);
+    } else if (chosenStyle === 'organic') {
+      return this.generateProceduralOrganic(bbox);
+    } else {
+      return this.generateProceduralSprawl(bbox);
+    }
+  }
+
+  generateProceduralGrid(bbox) {
     const { south, west, north, east } = bbox;
     const buildings = [];
     const roads = [];
     const water = [];
 
-    // Define coordinate bounds
-    const latStep = (north - south) / 6;
-    const lngStep = (east - west) / 6;
+    const numBlocksX = Math.floor(Math.random() * 3) + 4; // 4 to 6
+    const numBlocksY = Math.floor(Math.random() * 3) + 4; // 4 to 6
+    const latStep = (north - south) / (numBlocksY + 1);
+    const lngStep = (east - west) / (numBlocksX + 1);
 
-    // Generate procedural grid of streets and avenues
-    for (let i = 1; i < 6; i++) {
+    // Draw grid roads
+    for (let i = 1; i <= numBlocksY; i++) {
       const rLat = south + i * latStep;
       roads.push({
         id: `procedural_road_h_${i}`,
-        coords: [
-          { lat: rLat, lng: west },
-          { lat: rLat, lng: east }
-        ],
+        coords: [{ lat: rLat, lng: west }, { lat: rLat, lng: east }],
         type: 'primary',
         lanes: 2,
         name: `Street ${i}`
       });
-
+    }
+    for (let i = 1; i <= numBlocksX; i++) {
       const rLng = west + i * lngStep;
       roads.push({
         id: `procedural_road_v_${i}`,
-        coords: [
-          { lat: south, lng: rLng },
-          { lat: north, lng: rLng }
-        ],
+        coords: [{ lat: south, lng: rLng }, { lat: north, lng: rLng }],
         type: 'primary',
         lanes: 2,
         name: `Avenue ${i}`
       });
     }
 
-    // Populate block geometries with mock buildings
+    // River
+    const riverY = south + (Math.random() * 0.4 + 0.3) * (north - south);
+    water.push({
+      id: 'procedural_river',
+      coords: [
+        { lat: riverY - 0.0004, lng: west },
+        { lat: riverY + 0.0004, lng: west },
+        { lat: riverY + 0.0004, lng: east },
+        { lat: riverY - 0.0004, lng: east }
+      ],
+      type: 'water'
+    });
+
+    // Populate buildings in blocks (skip where they intersect the river)
     let bId = 0;
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
+    for (let r = 0; r <= numBlocksY; r++) {
+      for (let c = 0; c <= numBlocksX; c++) {
         const bLat = south + r * latStep + latStep / 2;
         const bLng = west + c * lngStep + lngStep / 2;
-        const offset = 0.0006;
+        
+        // Skip building if it's near/in the river
+        if (Math.abs(bLat - riverY) < 0.0008) continue;
+
+        const offset = Math.min(latStep, lngStep) * 0.25;
         
         buildings.push({
           id: `procedural_b_${bId++}`,
@@ -272,24 +301,267 @@ out geom;`;
           type: 'yes',
           levels: Math.floor(Math.random() * 6) + 1,
           height: null,
-          use: 'residential'
+          use: Math.random() < 0.2 ? 'commercial' : 'residential'
         });
       }
     }
 
-    // Add central water body / canal
+    return { buildings, roads, water };
+  }
+
+  generateProceduralRadial(bbox) {
+    const { south, west, north, east } = bbox;
+    const buildings = [];
+    const roads = [];
+    const water = [];
+
     const centerLat = (south + north) / 2;
     const centerLng = (east + west) / 2;
-    const wSize = 0.001;
+    const maxRadius = Math.min(north - south, east - west) / 2;
+
+    // Central circular lake or park
+    const wSize = maxRadius * 0.2;
     water.push({
-      id: 'procedural_water',
-      coords: [
-        { lat: centerLat - wSize, lng: centerLng - wSize },
-        { lat: centerLat - wSize, lng: centerLng + wSize },
-        { lat: centerLat + wSize, lng: centerLng + wSize },
-        { lat: centerLat + wSize, lng: centerLng - wSize }
-      ],
+      id: 'procedural_central_lake',
+      coords: Array.from({ length: 8 }, (_, i) => {
+        const angle = (i / 8) * Math.PI * 2;
+        return {
+          lat: centerLat + Math.sin(angle) * wSize,
+          lng: centerLng + Math.cos(angle) * wSize
+        };
+      }),
       type: 'water'
+    });
+
+    // Circular ring roads
+    const numRings = 3;
+    for (let r = 1; r <= numRings; r++) {
+      const radius = wSize + (maxRadius - wSize) * (r / numRings);
+      const ringCoords = Array.from({ length: 16 }, (_, i) => {
+        const angle = (i / 16) * Math.PI * 2;
+        return {
+          lat: centerLat + Math.sin(angle) * radius,
+          lng: centerLng + Math.cos(angle) * radius
+        };
+      });
+      // Close the ring loop
+      ringCoords.push(ringCoords[0]);
+      roads.push({
+        id: `procedural_ring_${r}`,
+        coords: ringCoords,
+        type: 'secondary',
+        lanes: 2,
+        name: `Ring Road ${r}`
+      });
+    }
+
+    // Radial spokes roads
+    const numSpokes = 8;
+    for (let s = 0; s < numSpokes; s++) {
+      const angle = (s / numSpokes) * Math.PI * 2;
+      roads.push({
+        id: `procedural_spoke_${s}`,
+        coords: [
+          { lat: centerLat + Math.sin(angle) * wSize, lng: centerLng + Math.cos(angle) * wSize },
+          { lat: centerLat + Math.sin(angle) * maxRadius, lng: centerLng + Math.cos(angle) * maxRadius }
+        ],
+        type: 'primary',
+        lanes: 2,
+        name: `Radial Spoke ${s + 1}`
+      });
+    }
+
+    // Buildings between rings and spokes
+    let bId = 0;
+    for (let r = 1; r <= numRings; r++) {
+      const radius = wSize + (maxRadius - wSize) * ((r - 0.5) / numRings);
+      for (let s = 0; s < numSpokes; s++) {
+        // Find midpoint angle between spokes
+        const angle = ((s + 0.5) / numSpokes) * Math.PI * 2;
+        const bLat = centerLat + Math.sin(angle) * radius;
+        const bLng = centerLng + Math.cos(angle) * radius;
+
+        const offset = maxRadius * 0.05;
+        buildings.push({
+          id: `procedural_b_${bId++}`,
+          coords: [
+            { lat: bLat - offset, lng: bLng - offset },
+            { lat: bLat - offset, lng: bLng + offset },
+            { lat: bLat + offset, lng: bLng + offset },
+            { lat: bLat + offset, lng: bLng - offset }
+          ],
+          type: 'yes',
+          levels: Math.floor(Math.random() * 8) + 1,
+          height: null,
+          use: r === 1 ? 'commercial' : 'residential'
+        });
+      }
+    }
+
+    return { buildings, roads, water };
+  }
+
+  generateProceduralOrganic(bbox) {
+    const { south, west, north, east } = bbox;
+    const buildings = [];
+    const roads = [];
+    const water = [];
+
+    // Curve water/river
+    const riverCoords = [];
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10;
+      const lat = south + t * (north - south);
+      const lngOffset = Math.sin(t * Math.PI * 2) * (east - west) * 0.15;
+      const lng = (west + east) / 2 + lngOffset;
+      riverCoords.push({ lat, lng });
+    }
+    // Double back for width
+    const waterCoords = [
+      ...riverCoords.map(c => ({ lat: c.lat, lng: c.lng - 0.0004 })),
+      ...[...riverCoords].reverse().map(c => ({ lat: c.lat, lng: c.lng + 0.0004 }))
+    ];
+    water.push({
+      id: 'procedural_organic_river',
+      coords: waterCoords,
+      type: 'water'
+    });
+
+    // Curvy main road crossing the river
+    const mainRoadCoords = [];
+    for (let i = 0; i <= 6; i++) {
+      const t = i / 6;
+      const lng = west + t * (east - west);
+      const latOffset = Math.cos(t * Math.PI * 1.5) * (north - south) * 0.2;
+      const lat = (south + north) / 2 + latOffset;
+      mainRoadCoords.push({ lat, lng });
+    }
+    roads.push({
+      id: 'procedural_organic_main',
+      coords: mainRoadCoords,
+      type: 'primary',
+      lanes: 4,
+      name: 'Scenic Parkway'
+    });
+
+    // Scattered organic residential streets branching off
+    let rId = 0;
+    let bId = 0;
+    for (let i = 1; i < mainRoadCoords.length - 1; i++) {
+      const pt = mainRoadCoords[i];
+      // Branch north
+      const branchN = [
+        pt,
+        { lat: pt.lat + (north - pt.lat) * 0.5, lng: pt.lng + (Math.random() - 0.5) * (east - west) * 0.2 },
+        { lat: north - 0.0005, lng: pt.lng + (Math.random() - 0.5) * (east - west) * 0.3 }
+      ];
+      roads.push({
+        id: `procedural_organic_branch_n_${rId++}`,
+        coords: branchN,
+        type: 'residential',
+        lanes: 2,
+        name: `Winding Way ${rId}`
+      });
+
+      // Place buildings along the branch
+      branchN.forEach((wpt, index) => {
+        if (index === 0) return;
+        const bLat = wpt.lat;
+        const bLng = wpt.lng + 0.0006;
+        buildings.push({
+          id: `procedural_b_${bId++}`,
+          coords: [
+            { lat: bLat - 0.0003, lng: bLng - 0.0003 },
+            { lat: bLat - 0.0003, lng: bLng + 0.0003 },
+            { lat: bLat + 0.0003, lng: bLng + 0.0003 },
+            { lat: bLat + 0.0003, lng: bLng - 0.0003 }
+          ],
+          type: 'yes',
+          levels: Math.floor(Math.random() * 3) + 1,
+          height: null,
+          use: 'residential'
+        });
+      });
+    }
+
+    return { buildings, roads, water };
+  }
+
+  generateProceduralSprawl(bbox) {
+    const { south, west, north, east } = bbox;
+    const buildings = [];
+    const roads = [];
+    const water = [];
+
+    // Central highway line
+    roads.push({
+      id: 'procedural_highway',
+      coords: [
+        { lat: south, lng: west + (east - west) * 0.3 },
+        { lat: north, lng: east - (east - west) * 0.3 }
+      ],
+      type: 'motorway',
+      lanes: 6,
+      name: 'Interstate 3000'
+    });
+
+    // 3 Cluster Nodes
+    const centers = [
+      { lat: south + (north - south) * 0.25, lng: west + (east - west) * 0.25, type: 'industrial' },
+      { lat: south + (north - south) * 0.75, lng: east - (east - west) * 0.25, type: 'commercial' },
+      { lat: (south + north) / 2, lng: (west + east) / 2, type: 'residential' }
+    ];
+
+    // Local loop roads for each node center
+    let bId = 0;
+    centers.forEach((node, nIdx) => {
+      const ringCoords = Array.from({ length: 8 }, (_, i) => {
+        const angle = (i / 8) * Math.PI * 2;
+        return {
+          lat: node.lat + Math.sin(angle) * 0.001,
+          lng: node.lng + Math.cos(angle) * 0.001
+        };
+      });
+      ringCoords.push(ringCoords[0]);
+      roads.push({
+        id: `procedural_node_ring_${nIdx}`,
+        coords: ringCoords,
+        type: 'residential',
+        lanes: 2,
+        name: `Sector loop ${nIdx}`
+      });
+
+      // Feeder road to main highway
+      roads.push({
+        id: `procedural_node_feeder_${nIdx}`,
+        coords: [
+          node,
+          { lat: node.lat, lng: (west + east) / 2 }
+        ],
+        type: 'primary',
+        lanes: 4,
+        name: `Arterial ${nIdx}`
+      });
+
+      // Buildings clustered around this node
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const bLat = node.lat + Math.sin(angle) * 0.0006;
+        const bLng = node.lng + Math.cos(angle) * 0.0006;
+        buildings.push({
+          id: `procedural_b_${bId++}`,
+          coords: [
+            { lat: bLat - 0.00025, lng: bLng - 0.00025 },
+            { lat: bLat - 0.00025, lng: bLng + 0.00025 },
+            { lat: bLat + 0.00025, lng: bLng + 0.00025 },
+            { lat: bLat + 0.00025, lng: bLng - 0.00025 }
+          ],
+          type: 'yes',
+          levels: node.type === 'commercial' ? Math.floor(Math.random() * 12) + 4 : Math.floor(Math.random() * 3) + 1,
+          height: null,
+          use: node.type
+        });
+      }
     });
 
     return { buildings, roads, water };

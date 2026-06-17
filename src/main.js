@@ -71,6 +71,23 @@ function setupPhase1Listeners() {
     });
   });
 
+  // Data Source toggles
+  const sourceOsmToggle = document.getElementById('source-osm-toggle');
+  const sourceAiToggle = document.getElementById('source-ai-toggle');
+
+  if (sourceOsmToggle && sourceAiToggle) {
+    sourceOsmToggle.checked = store.getState().fetchOSMData;
+    sourceAiToggle.checked = store.getState().useAISatelliteVision;
+
+    sourceOsmToggle.addEventListener('change', () => {
+      store.updateState({ fetchOSMData: sourceOsmToggle.checked });
+    });
+
+    sourceAiToggle.addEventListener('change', () => {
+      store.updateState({ useAISatelliteVision: sourceAiToggle.checked });
+    });
+  }
+
   // Universal key toggle
   const universalToggle = document.getElementById('universal-key-toggle');
   const singleKeyContainer = document.getElementById('single-key-container');
@@ -150,31 +167,36 @@ function setupPhase1Listeners() {
     });
 
     // 3. Run Satellite Spectrum Analysis first to establish the base landuse grid
-    statusText.textContent = 'Analyzing satellite spectrum for natural and brownfield layouts...';
-    logToLoader('Requesting ESRI static satellite tile for analysis...', 'info');
+    // 3. Run Satellite Spectrum Analysis first if enabled
     let visionResult = null;
-    try {
-      const esriStaticUrl = `https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=${state.bbox.west},${state.bbox.south},${state.bbox.east},${state.bbox.north}&bboxSR=4326&imageSR=4326&size=500,500&format=png&f=image`;
-      logToLoader(`Static Satellite URL generated. Length: ${esriStaticUrl.length} chars.`, 'info');
-      
-      const hasKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.vision;
-      if (hasKey) {
-        logToLoader('Sending image URL to AI Vision Service for landuse analysis...', 'info');
-      } else {
-        logToLoader('No AI Key provided for Vision Service. Vision analysis will use simulation mock.', 'warn');
+    if (state.useAISatelliteVision) {
+      statusText.textContent = 'Analyzing satellite spectrum for natural and brownfield layouts...';
+      logToLoader('Requesting ESRI static satellite tile for analysis...', 'info');
+      try {
+        const esriStaticUrl = `https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=${state.bbox.west},${state.bbox.south},${state.bbox.east},${state.bbox.north}&bboxSR=4326&imageSR=4326&size=500,500&format=png&f=image`;
+        logToLoader(`Static Satellite URL generated. Length: ${esriStaticUrl.length} chars.`, 'info');
+        
+        const hasKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.vision;
+        if (hasKey) {
+          logToLoader('Sending image URL to AI Vision Service for landuse analysis...', 'info');
+        } else {
+          logToLoader('No AI Key provided for Vision Service. Vision analysis will use simulation mock.', 'warn');
+        }
+        
+        visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl);
+        if (visionResult) {
+          logToLoader('AI Satellite analysis completed successfully.', 'success');
+          if (visionResult.water) logToLoader(`AI detected: ${visionResult.water.length} water bodies/zones.`, 'info');
+          if (visionResult.roads) logToLoader(`AI detected: ${visionResult.roads.length} road networks/corridors.`, 'info');
+          if (visionResult.residential) logToLoader(`AI detected: ${visionResult.residential.length} residential neighborhoods.`, 'info');
+          if (visionResult.commercial) logToLoader(`AI detected: ${visionResult.commercial.length} commercial zones.`, 'info');
+          if (visionResult.industrial) logToLoader(`AI detected: ${visionResult.industrial.length} industrial complexes.`, 'info');
+        }
+      } catch (visionErr) {
+        logToLoader(`AI Vision processing failed, utilizing standard base layout fallback: ${visionErr.message}`, 'warn');
       }
-      
-      visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl);
-      if (visionResult) {
-        logToLoader('AI Satellite analysis completed successfully.', 'success');
-        if (visionResult.water) logToLoader(`AI detected: ${visionResult.water.length} water bodies/zones.`, 'info');
-        if (visionResult.roads) logToLoader(`AI detected: ${visionResult.roads.length} road networks/corridors.`, 'info');
-        if (visionResult.residential) logToLoader(`AI detected: ${visionResult.residential.length} residential neighborhoods.`, 'info');
-        if (visionResult.commercial) logToLoader(`AI detected: ${visionResult.commercial.length} commercial zones.`, 'info');
-        if (visionResult.industrial) logToLoader(`AI detected: ${visionResult.industrial.length} industrial complexes.`, 'info');
-      }
-    } catch (visionErr) {
-      logToLoader(`AI Vision processing failed, utilizing standard base layout fallback: ${visionErr.message}`, 'warn');
+    } else {
+      logToLoader('AI Satellite analysis disabled by user settings. Skipping.', 'info');
     }
 
     // 4. Grid Generation (Satellite base first, then overlay OSM highways & building footprints)
@@ -254,21 +276,25 @@ function setupPhase1Listeners() {
     loader.querySelectorAll('.retry-extract-btn, .bypass-ai-btn, .action-buttons-wrapper').forEach(btn => btn.remove());
 
     try {
-      // 1. Fetch OSM Vector Data from mirrors
-      statusText.textContent = 'Querying OpenStreetMap Overpass API...';
-      let parsed = null;
+      // 1. Fetch OSM Vector Data from mirrors if enabled
+      let parsed = { buildings: [], roads: [], water: [] };
       let rawOsm = null;
       let osmFailed = false;
 
-      logToLoader('Querying OpenStreetMap Overpass servers...', 'info');
-      try {
-        rawOsm = await overpassService.fetchMapData(state.bbox, logToLoader);
-        statusText.textContent = 'Parsing geometries and highways...';
-        logToLoader('OpenStreetMap data fetched successfully. Parsing geometries...', 'success');
-        parsed = overpassService.parseGeometries(rawOsm);
-      } catch (osmErr) {
-        logToLoader(`OSM query failed: ${osmErr.message}`, 'error');
-        osmFailed = true;
+      if (state.fetchOSMData) {
+        statusText.textContent = 'Querying OpenStreetMap Overpass API...';
+        logToLoader('Querying OpenStreetMap Overpass servers...', 'info');
+        try {
+          rawOsm = await overpassService.fetchMapData(state.bbox, logToLoader);
+          statusText.textContent = 'Parsing geometries and highways...';
+          logToLoader('OpenStreetMap data fetched successfully. Parsing geometries...', 'success');
+          parsed = overpassService.parseGeometries(rawOsm);
+        } catch (osmErr) {
+          logToLoader(`OSM query failed: ${osmErr.message}`, 'error');
+          osmFailed = true;
+        }
+      } else {
+        logToLoader('OpenStreetMap (OSM) extraction disabled by user settings.', 'warn');
       }
 
       if (osmFailed) {
@@ -291,21 +317,36 @@ function setupPhase1Listeners() {
         const bypassBtn = document.createElement('button');
         bypassBtn.className = 'btn btn-secondary bypass-ai-btn';
         bypassBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
-        bypassBtn.innerHTML = '<i class="fa-solid fa-brain"></i> Bypass using AI Satellite';
+        if (state.useAISatelliteVision) {
+          bypassBtn.innerHTML = '<i class="fa-solid fa-brain"></i> Bypass using AI Satellite';
+        } else {
+          bypassBtn.innerHTML = '<i class="fa-solid fa-network-wired"></i> Bypass using Procedural Environment';
+        }
         bypassBtn.addEventListener('click', async () => {
           btnWrapper.remove();
           if (logContainer) logContainer.innerHTML = '';
-          logToLoader('User selected OSM Bypass. Initializing pure Satellite Simulation...', 'warn');
-          try {
-            await completeInitialization({ buildings: [], roads: [], water: [] }, null, true);
-          } catch (bypassErr) {
-            console.error('Bypass initialization error:', bypassErr);
-            statusText.textContent = `Bypass Error: ${bypassErr.message}`;
-            logToLoader(`Bypass failed: ${bypassErr.message}`, 'error');
-          } finally {
-            if (!loader.querySelector('.action-buttons-wrapper')) {
-              loader.classList.add('hidden');
+          if (state.useAISatelliteVision) {
+            logToLoader('User selected OSM Bypass. Initializing pure Satellite Simulation...', 'warn');
+            try {
+              await completeInitialization({ buildings: [], roads: [], water: [] }, null, true);
+            } catch (bypassErr) {
+              console.error('Bypass initialization error:', bypassErr);
+              statusText.textContent = `Bypass Error: ${bypassErr.message}`;
+              logToLoader(`Bypass failed: ${bypassErr.message}`, 'error');
             }
+          } else {
+            logToLoader('User selected OSM Bypass. Generating randomized procedural environment...', 'warn');
+            try {
+              const proceduralData = overpassService.generateProceduralElements(state.bbox);
+              await completeInitialization(proceduralData, null, true);
+            } catch (bypassErr) {
+              console.error('Bypass initialization error:', bypassErr);
+              statusText.textContent = `Bypass Error: ${bypassErr.message}`;
+              logToLoader(`Bypass failed: ${bypassErr.message}`, 'error');
+            }
+          }
+          if (!loader.querySelector('.action-buttons-wrapper')) {
+            loader.classList.add('hidden');
           }
         });
 
@@ -327,8 +368,19 @@ function setupPhase1Listeners() {
         return; // Exit click handler - loader remains visible with buttons
       }
 
-      // Success flow
-      await completeInitialization(parsed, rawOsm, false);
+      if (!state.fetchOSMData) {
+        if (state.useAISatelliteVision) {
+          logToLoader('Initializing simulation using pure AI Satellite Vision...', 'info');
+          await completeInitialization({ buildings: [], roads: [], water: [] }, null, true);
+        } else {
+          logToLoader('Both OSM and AI Satellite Vision disabled. Generating randomized procedural environment...', 'info');
+          const proceduralData = overpassService.generateProceduralElements(state.bbox);
+          await completeInitialization(proceduralData, null, true);
+        }
+      } else {
+        // Success flow
+        await completeInitialization(parsed, rawOsm, false);
+      }
 
     } catch (err) {
       console.error('Initialization error:', err);
