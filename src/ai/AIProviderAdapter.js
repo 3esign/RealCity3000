@@ -3,6 +3,12 @@ import store from '../state/store.js';
 export class AIProviderAdapter {
   constructor() {}
 
+  cleanJSON(text) {
+    if (!text) return '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    return jsonMatch ? jsonMatch[0] : text;
+  }
+
   async sendRequest(systemPrompt, userPrompt) {
     const state = store.getState();
     const apiKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.mayor;
@@ -19,9 +25,7 @@ export class AIProviderAdapter {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': 'http://localhost:3000',
-            'X-Title': 'RealCity3000'
+            'Authorization': `Bearer ${apiKey}`
           },
           body: JSON.stringify({
             model: 'deepseek/deepseek-chat',
@@ -33,7 +37,7 @@ export class AIProviderAdapter {
         });
         const data = await response.json();
         if (data.choices && data.choices[0]) {
-          return data.choices[0].message.content;
+          return this.cleanJSON(data.choices[0].message.content);
         }
       } else if (provider === 'openai') {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -53,7 +57,7 @@ export class AIProviderAdapter {
         });
         const data = await response.json();
         if (data.choices && data.choices[0]) {
-          return data.choices[0].message.content;
+          return this.cleanJSON(data.choices[0].message.content);
         }
       } else if (provider === 'anthropic') {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -76,9 +80,7 @@ export class AIProviderAdapter {
         });
         const data = await response.json();
         if (data.content && data.content[0]) {
-          const text = data.content[0].text;
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          return jsonMatch ? jsonMatch[0] : text;
+          return this.cleanJSON(data.content[0].text);
         }
       } else if (provider === 'gemini') {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
@@ -90,9 +92,7 @@ export class AIProviderAdapter {
         });
         const data = await response.json();
         if (data.candidates && data.candidates[0].content.parts[0]) {
-          const text = data.candidates[0].content.parts[0].text;
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          return jsonMatch ? jsonMatch[0] : text;
+          return this.cleanJSON(data.candidates[0].content.parts[0].text);
         }
       } else if (provider === 'groq') {
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -111,7 +111,7 @@ export class AIProviderAdapter {
         });
         const data = await response.json();
         if (data.choices && data.choices[0]) {
-          return data.choices[0].message.content;
+          return this.cleanJSON(data.choices[0].message.content);
         }
       } else if (provider === 'deepseek') {
         const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -130,7 +130,7 @@ export class AIProviderAdapter {
         });
         const data = await response.json();
         if (data.choices && data.choices[0]) {
-          return data.choices[0].message.content;
+          return this.cleanJSON(data.choices[0].message.content);
         }
       }
 

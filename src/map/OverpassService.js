@@ -13,16 +13,10 @@ export class OverpassService {
     const query = `[out:json][timeout:30];
 (
   way["building"](${south},${west},${north},${east});
-  relation["building"](${south},${west},${north},${east});
-  
   way["highway"](${south},${west},${north},${east});
-  
   way["natural"="water"](${south},${west},${north},${east});
-  relation["natural"="water"](${south},${west},${north},${east});
   way["waterway"](${south},${west},${north},${east});
-  
   way["landuse"](${south},${west},${north},${east});
-  relation["landuse"](${south},${west},${north},${east});
 );
 out geom;`;
 
