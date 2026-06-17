@@ -48,11 +48,10 @@ out geom;`;
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per endpoint
       
       try {
+        const fetchUrl = `${url}?data=${encodeURIComponent(query)}`;
         log(`Querying mirror ${i + 1}/${shuffled.length}: ${host} (30s timeout)...`);
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: body,
+        const response = await fetch(fetchUrl, {
+          method: 'GET',
           signal: controller.signal
         });
         
