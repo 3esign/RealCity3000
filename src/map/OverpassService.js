@@ -327,11 +327,16 @@ out geom;`;
           name: tags.name || 'Unnamed Road'
         });
       } else if (tags.natural === 'water' || tags.waterway || tags.landuse === 'basin' || tags.landuse === 'reservoir') {
+        const type = tags.waterway || tags.water || tags.natural || tags.landuse;
+        const isWaterway = !!tags.waterway || 
+                           ['river', 'stream', 'canal', 'ditch', 'drain', 'riverbank'].includes(tags.waterway) || 
+                           ['river', 'stream', 'canal', 'ditch', 'drain', 'riverbank'].includes(tags.water) || 
+                           ['river', 'stream', 'canal', 'ditch', 'drain', 'riverbank'].includes(tags.natural);
         water.push({
           id: element.id,
           coords: coords,
-          type: tags.natural || tags.waterway || tags.landuse,
-          isWaterway: !!tags.waterway
+          type: type,
+          isWaterway: isWaterway
         });
       }
     });

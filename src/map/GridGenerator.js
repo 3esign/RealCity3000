@@ -159,15 +159,13 @@ export class GridGenerator {
       });
     }
 
-    // Projection helpers
+    // Projection helpers (unclamped to prevent polygon edge distortion)
     const projectLng = (lng) => {
-      const val = ((lng - west) / (east - west)) * (width - 1);
-      return Math.min(Math.max(Math.round(val), 0), width - 1);
+      return Math.round(((lng - west) / (east - west)) * (width - 1));
     };
     
     const projectLat = (lat) => {
-      const val = ((north - lat) / (north - south)) * (height - 1);
-      return Math.min(Math.max(Math.round(val), 0), height - 1);
+      return Math.round(((north - lat) / (north - south)) * (height - 1));
     };
 
     const pointInPolygon = (pt, poly) => {
@@ -238,10 +236,10 @@ export class GridGenerator {
         }
       } else {
         const poly = w.coords.map(c => ({ x: projectLng(c.lng), y: projectLat(c.lat) }));
-        const minX = Math.min(...poly.map(p => p.x));
-        const maxX = Math.max(...poly.map(p => p.x));
-        const minY = Math.min(...poly.map(p => p.y));
-        const maxY = Math.max(...poly.map(p => p.y));
+        const minX = Math.max(0, Math.min(...poly.map(p => p.x)));
+        const maxX = Math.min(width - 1, Math.max(...poly.map(p => p.x)));
+        const minY = Math.max(0, Math.min(...poly.map(p => p.y)));
+        const maxY = Math.min(height - 1, Math.max(...poly.map(p => p.y)));
         
         for (let y = minY; y <= maxY; y++) {
           for (let x = minX; x <= maxX; x++) {
@@ -307,10 +305,10 @@ export class GridGenerator {
     // 3. Rasterize Buildings
     parsedData.buildings.forEach(b => {
       const poly = b.coords.map(c => ({ x: projectLng(c.lng), y: projectLat(c.lat) }));
-      const minX = Math.min(...poly.map(p => p.x));
-      const maxX = Math.max(...poly.map(p => p.x));
-      const minY = Math.min(...poly.map(p => p.y));
-      const maxY = Math.max(...poly.map(p => p.y));
+      const minX = Math.max(0, Math.min(...poly.map(p => p.x)));
+      const maxX = Math.min(width - 1, Math.max(...poly.map(p => p.x)));
+      const minY = Math.max(0, Math.min(...poly.map(p => p.y)));
+      const maxY = Math.min(height - 1, Math.max(...poly.map(p => p.y)));
 
       // Decide zoning type
       let type = 'RESIDENTIAL_LOW';

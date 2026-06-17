@@ -723,6 +723,28 @@ function setupPhase2Listeners() {
     });
   });
 
+  // AI Mayor helper to sync LLM provider badge
+  const updateMayorTickerBadge = () => {
+    const state = store.getState();
+    const provider = state.aiUseUniversal ? state.aiProvider : state.mayorProvider;
+    const apiKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.mayor;
+    const isLocal = provider === 'local' || !apiKey;
+    
+    const badge = document.getElementById('ai-mayor-provider-badge');
+    if (badge) {
+      badge.textContent = isLocal ? 'Local Engine' : provider;
+      if (isLocal) {
+        badge.style.background = 'rgba(148, 163, 184, 0.1)';
+        badge.style.borderColor = 'rgba(148, 163, 184, 0.2)';
+        badge.style.color = 'var(--text-secondary)';
+      } else {
+        badge.style.background = 'rgba(0, 240, 255, 0.1)';
+        badge.style.borderColor = 'rgba(0, 240, 255, 0.2)';
+        badge.style.color = 'var(--accent)';
+      }
+    }
+  };
+
   // AI Mayor toggle checkbox
   document.getElementById('ai-mayor-toggle').addEventListener('change', (e) => {
     const active = e.target.checked;
@@ -730,15 +752,26 @@ function setupPhase2Listeners() {
     
     const thoughtsBox = document.getElementById('ai-mayor-thoughts');
     const statusText = document.getElementById('ai-mayor-status');
+    const statusDot = document.getElementById('ai-mayor-status-dot');
+    const ticker = document.getElementById('ai-mayor-ticker');
 
     if (active) {
-      thoughtsBox.classList.remove('hidden');
-      statusText.textContent = 'AI Mayor Online';
-      statusText.style.color = 'var(--accent)';
+      if (thoughtsBox) thoughtsBox.classList.remove('hidden');
+      if (ticker) ticker.classList.remove('hidden');
+      if (statusText) {
+        statusText.textContent = 'AI Mayor Online';
+        statusText.style.color = 'var(--accent)';
+      }
+      if (statusDot) statusDot.className = 'ai-ticker-dot online';
+      updateMayorTickerBadge();
     } else {
-      thoughtsBox.classList.add('hidden');
-      statusText.textContent = 'AI Mayor Offline';
-      statusText.style.color = 'var(--text-secondary)';
+      if (thoughtsBox) thoughtsBox.classList.add('hidden');
+      if (ticker) ticker.classList.add('hidden');
+      if (statusText) {
+        statusText.textContent = 'AI Mayor Offline';
+        statusText.style.color = 'var(--text-secondary)';
+      }
+      if (statusDot) statusDot.className = 'ai-ticker-dot offline';
     }
   });
 
@@ -882,14 +915,47 @@ function setupPhase2Listeners() {
   // grid-painted event hook removed (manual zoning disabled)
 
   eventBus.on('ai-thinking-started', () => {
-    document.getElementById('ai-mayor-status').textContent = 'AI Mayor Thinking...';
-    document.getElementById('ai-mayor-status').style.color = 'var(--accent-amber)';
+    const statusText = document.getElementById('ai-mayor-status');
+    const statusDot = document.getElementById('ai-mayor-status-dot');
+    if (statusText) {
+      statusText.textContent = 'AI Mayor Thinking...';
+      statusText.style.color = 'var(--accent-amber)';
+    }
+    if (statusDot) statusDot.className = 'ai-ticker-dot thinking';
   });
 
-  eventBus.on('ai-thinking-completed', () => {
-    document.getElementById('ai-mayor-status').textContent = 'AI Mayor Online';
-    document.getElementById('ai-mayor-status').style.color = 'var(--accent)';
-    document.getElementById('ai-thought-content').textContent = store.getState().aiMayorThoughts;
+  eventBus.on('ai-thinking-completed', (data) => {
+    const statusText = document.getElementById('ai-mayor-status');
+    const statusDot = document.getElementById('ai-mayor-status-dot');
+    if (statusText) {
+      statusText.textContent = 'AI Mayor Online';
+      statusText.style.color = 'var(--accent)';
+    }
+    if (statusDot) statusDot.className = 'ai-ticker-dot online';
+    
+    const thoughts = store.getState().aiMayorThoughts;
+    const thoughtsContent = document.getElementById('ai-thought-content');
+    if (thoughtsContent) thoughtsContent.textContent = thoughts;
+
+    if (data) {
+      const pingEl = document.getElementById('ai-mayor-ping');
+      const pulseEl = document.getElementById('ai-mayor-pulse-count');
+      if (pingEl) pingEl.textContent = `Ping: ${data.latency} ms`;
+      if (pulseEl) pulseEl.textContent = `Pulse: ${data.pulse}`;
+    }
+  });
+
+  eventBus.on('ai-thinking-failed', (data) => {
+    const statusText = document.getElementById('ai-mayor-status');
+    const statusDot = document.getElementById('ai-mayor-status-dot');
+    if (statusText) {
+      statusText.textContent = 'AI Mayor Error';
+      statusText.style.color = 'var(--accent-red)';
+    }
+    if (statusDot) statusDot.className = 'ai-ticker-dot error';
+    
+    const thoughtsContent = document.getElementById('ai-thought-content');
+    if (thoughtsContent) thoughtsContent.textContent = `Connection failed: ${data.error || 'Unknown error'}`;
   });
 
   // Historical Validation trigger

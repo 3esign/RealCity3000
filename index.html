@@ -310,7 +310,15 @@
               <span class="slider-toggle"></span>
             </label>
           </div>
-          <div id="ai-mayor-status" class="ai-status-text">AI Mayor Offline</div>
+          <div class="ai-status-container">
+            <span id="ai-mayor-status-dot" class="ai-ticker-dot offline"></span>
+            <div id="ai-mayor-status" class="ai-status-text">AI Mayor Offline</div>
+          </div>
+          <div id="ai-mayor-ticker" class="ai-ticker-details hidden">
+            <span id="ai-mayor-provider-badge" class="ai-badge">Local Engine</span>
+            <span id="ai-mayor-ping" class="ai-ping-ticker">Ping: -- ms</span>
+            <span id="ai-mayor-pulse-count" class="ai-pulse-ticker">Pulse: 0</span>
+          </div>
           <div id="ai-mayor-thoughts" class="ai-thoughts-box hidden">
             <div class="thought-bubble-title">AI Planner Reasoning:</div>
             <p id="ai-thought-content">Waiting for simulation step...</p>
@@ -417,22 +425,22 @@
         
         <!-- Live KPI Cards -->
         <div class="kpi-grid">
-          <div class="kpi-card">
+          <div class="kpi-card" data-tooltip="Population: The total estimated city population calculated from residential cell counts and density.">
             <span class="label">POPULATION</span>
             <span class="val" id="metric-population">0</span>
             <span class="trend neutral" id="trend-population"><i class="fa-solid fa-minus"></i> 0%</span>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-tooltip="Urban Density: The percentage of the active grid containing built-up structures (Residential, Commercial, Industrial, and Infrastructure).">
             <span class="label">URBAN DENSITY</span>
             <span class="val" id="metric-density">0.0%</span>
             <span class="trend neutral" id="trend-density"><i class="fa-solid fa-minus"></i> 0%</span>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-tooltip="Average Land Value: The average economic valuation of grid cells, driven by desirability, low pollution, and zoning access.">
             <span class="label">AVG LAND VALUE</span>
             <span class="val" id="metric-value">$0.00</span>
             <span class="trend neutral" id="trend-value"><i class="fa-solid fa-minus"></i> 0%</span>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-tooltip="Pollution Index: The city-wide average environmental pollution level, elevated near industrial cells and lowered by open space.">
             <span class="label">POLLUTION INDEX</span>
             <span class="val" id="metric-pollution">0.00</span>
             <span class="trend neutral" id="trend-pollution"><i class="fa-solid fa-minus"></i> 0%</span>
@@ -443,15 +451,15 @@
         <div class="metrics-section">
           <h4 data-tooltip="RCI Demand: Visualizes the relative market pressure for residential (R), commercial (C), and industrial (I) development expansion.">RCI Development Demand</h4>
           <div class="rci-indicator">
-            <div class="rci-bar-wrapper">
+            <div class="rci-bar-wrapper" data-tooltip="Residential Demand: Market pressure for new housing expansion, driven by job growth and density caps.">
               <span class="label">R</span>
               <div class="rci-track"><div id="rci-res-bar" class="rci-fill res" style="height: 50%;"></div></div>
             </div>
-            <div class="rci-bar-wrapper">
+            <div class="rci-bar-wrapper" data-tooltip="Commercial Demand: Market pressure for shops and services, driven by local population size and commerce.">
               <span class="label">C</span>
               <div class="rci-track"><div id="rci-com-bar" class="rci-fill com" style="height: 50%;"></div></div>
             </div>
-            <div class="rci-bar-wrapper">
+            <div class="rci-bar-wrapper" data-tooltip="Industrial Demand: Market pressure for factories and warehouses, driven by job availability and lower taxes.">
               <span class="label">I</span>
               <div class="rci-track"><div id="rci-ind-bar" class="rci-fill ind" style="height: 50%;"></div></div>
             </div>

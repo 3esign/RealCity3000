@@ -38,26 +38,28 @@ Format:
 - Demand (R,C,I): Res ${metrics.rciDemand.r}, Com ${metrics.rciDemand.c}, Ind ${metrics.rciDemand.i}`;
 
     this.isRequestPending = true;
+    this.pulseCount = (this.pulseCount || 0) + 1;
     eventBus.emit('ai-thinking-started');
 
+    const startTime = performance.now();
     try {
       const responseText = await this.adapter.sendRequest(systemPrompt, userPrompt, { feature: 'mayor' });
+      const latency = Math.round(performance.now() - startTime);
       const decision = JSON.parse(responseText);
+      
+      eventBus.emit('ai-thinking-completed', { latency, pulse: this.pulseCount });
       
       if (decision && decision.actions) {
         this.applyDecisions(decision);
       }
     } catch (err) {
       console.error('AI Mayor processing failed', err);
-      store.dispatch({
-        type: 'SET_PARAMS',
-        payload: {
-          aiMayorThoughts: `Error processing AI Mayor decision: ${err.message}`
-        }
+      eventBus.emit('ai-thinking-failed', { error: err.message });
+      store.updateState({
+        aiMayorThoughts: `Error processing AI Mayor decision: ${err.message}`
       });
     } finally {
       this.isRequestPending = false;
-      eventBus.emit('ai-thinking-completed');
     }
   }
 
