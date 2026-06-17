@@ -123,8 +123,9 @@ function setupPhase1Listeners() {
       // 1. Fetch OSM Vector Data
       statusText.textContent = 'Querying OpenStreetMap Overpass API...';
       let parsed;
+      let rawOsm = null;
       try {
-        const rawOsm = await overpassService.fetchMapData(state.bbox);
+        rawOsm = await overpassService.fetchMapData(state.bbox);
         statusText.textContent = 'Parsing geometries and highways...';
         parsed = overpassService.parseGeometries(rawOsm);
       } catch (osmErr) {
