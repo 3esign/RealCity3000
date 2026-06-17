@@ -30,41 +30,101 @@ export class GridGenerator {
       });
     });
 
+    // Helper to extract coordinates, supporting both [x, y] and [minX, minY, maxX, maxY]
+    const getSatelliteCoords = (arr) => {
+      if (!arr || !Array.isArray(arr)) return [];
+      const coords = [];
+      arr.forEach(item => {
+        if (!Array.isArray(item)) return;
+        if (item.length === 2) {
+          coords.push({ x: item[0], y: item[1] });
+        } else if (item.length === 4) {
+          const [minX, minY, maxX, maxY] = item;
+          const startX = Math.min(minX, maxX);
+          const endX = Math.max(minX, maxX);
+          const startY = Math.min(minY, maxY);
+          const endY = Math.max(minY, maxY);
+          for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+              coords.push({ x, y });
+            }
+          }
+        }
+      });
+      return coords;
+    };
+
     // Seed base cells based on satellite detection
     if (satelliteData) {
-      if (satelliteData.water) {
-        satelliteData.water.forEach(([cx, cy]) => {
-          if (grid[cy] && grid[cy][cx]) {
-            grid[cy][cx].type = 'WATER';
-            grid[cy][cx].originalType = 'WATER';
-            grid[cy][cx].elevation = -0.5; // depressed water level
-          }
-        });
-      }
-      if (satelliteData.denseForests) {
-        satelliteData.denseForests.forEach(([cx, cy]) => {
-          if (grid[cy] && grid[cy][cx] && grid[cy][cx].type === 'VACANT') {
-            grid[cy][cx].type = 'FOREST';
-            grid[cy][cx].originalType = 'FOREST';
-          }
-        });
-      }
-      if (satelliteData.brownfields) {
-        satelliteData.brownfields.forEach(([cx, cy]) => {
-          if (grid[cy] && grid[cy][cx] && grid[cy][cx].type === 'VACANT') {
-            grid[cy][cx].type = 'BROWNFIELD';
-            grid[cy][cx].originalType = 'BROWNFIELD';
-            grid[cy][cx].landValue = 5.0; // Depressed land value
-          }
-        });
-      }
-      if (satelliteData.vacantLots) {
-        satelliteData.vacantLots.forEach(([cx, cy]) => {
-          if (grid[cy] && grid[cy][cx] && grid[cy][cx].type === 'VACANT') {
-            grid[cy][cx].landValue = 8.0; // Slightly lower land value
-          }
-        });
-      }
+      const waterCoords = getSatelliteCoords(satelliteData.water);
+      waterCoords.forEach(({ x, y }) => {
+        if (grid[y] && grid[y][x]) {
+          grid[y][x].type = 'WATER';
+          grid[y][x].originalType = 'WATER';
+          grid[y][x].elevation = -0.5; // depressed water level
+        }
+      });
+
+      const forestCoords = getSatelliteCoords(satelliteData.denseForests || satelliteData.forests);
+      forestCoords.forEach(({ x, y }) => {
+        if (grid[y] && grid[y][x] && grid[y][x].type === 'VACANT') {
+          grid[y][x].type = 'FOREST';
+          grid[y][x].originalType = 'FOREST';
+        }
+      });
+
+      const brownfieldCoords = getSatelliteCoords(satelliteData.brownfields);
+      brownfieldCoords.forEach(({ x, y }) => {
+        if (grid[y] && grid[y][x] && grid[y][x].type === 'VACANT') {
+          grid[y][x].type = 'BROWNFIELD';
+          grid[y][x].originalType = 'BROWNFIELD';
+          grid[y][x].landValue = 5.0; // Depressed land value
+        }
+      });
+
+      const vacantCoords = getSatelliteCoords(satelliteData.vacantLots);
+      vacantCoords.forEach(({ x, y }) => {
+        if (grid[y] && grid[y][x] && grid[y][x].type === 'VACANT') {
+          grid[y][x].landValue = 8.0; // Slightly lower land value
+        }
+      });
+
+      const roadCoords = getSatelliteCoords(satelliteData.roads);
+      roadCoords.forEach(({ x, y }) => {
+        if (grid[y] && grid[y][x] && grid[y][x].type !== 'WATER') {
+          grid[y][x].type = 'ROAD';
+          grid[y][x].originalType = 'ROAD';
+          grid[y][x].roadAccess = 1.0;
+        }
+      });
+
+      const resCoords = getSatelliteCoords(satelliteData.residential);
+      resCoords.forEach(({ x, y }) => {
+        if (grid[y] && grid[y][x] && grid[y][x].type === 'VACANT') {
+          grid[y][x].type = 'RESIDENTIAL_LOW';
+          grid[y][x].originalType = 'RESIDENTIAL_LOW';
+          grid[y][x].density = 2;
+          grid[y][x].population = 4;
+        }
+      });
+
+      const comCoords = getSatelliteCoords(satelliteData.commercial);
+      comCoords.forEach(({ x, y }) => {
+        if (grid[y] && grid[y][x] && grid[y][x].type === 'VACANT') {
+          grid[y][x].type = 'COMMERCIAL';
+          grid[y][x].originalType = 'COMMERCIAL';
+          grid[y][x].density = 2;
+        }
+      });
+
+      const indCoords = getSatelliteCoords(satelliteData.industrial);
+      indCoords.forEach(({ x, y }) => {
+        if (grid[y] && grid[y][x] && grid[y][x].type === 'VACANT') {
+          grid[y][x].type = 'INDUSTRIAL';
+          grid[y][x].originalType = 'INDUSTRIAL';
+          grid[y][x].density = 2;
+        }
+      });
     }
 
     // Projection helpers

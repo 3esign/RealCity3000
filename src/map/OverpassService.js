@@ -5,8 +5,14 @@ export class OverpassService {
     this.endpoint = 'https://overpass-api.de/api/interpreter';
   }
 
-  async fetchMapData(bbox) {
+  async fetchMapData(bbox, logFn = null) {
+    const log = (msg, type = 'info') => {
+      console.log(`[OverpassService] ${msg}`);
+      if (logFn) logFn(msg, type);
+    };
+
     const { south, west, north, east } = bbox;
+    log(`BBox bounds: S:${south.toFixed(4)}, W:${west.toFixed(4)}, N:${north.toFixed(4)}, E:${east.toFixed(4)}`);
     
     // Construct Overpass QL query
     // [out:json] sets json output, out geom returns coordinate arrays in ways directly
@@ -32,15 +38,17 @@ out geom;`;
 
     // Shuffle endpoint order so we don't always hammer the same first server
     const shuffled = [...endpoints].sort(() => Math.random() - 0.5);
+    log(`Shuffled Overpass endpoints: ${shuffled.map(url => url.split('/')[2]).join(', ')}`);
 
     let lastError = null;
     for (let i = 0; i < shuffled.length; i++) {
       const url = shuffled[i];
+      const host = url.split('/')[2];
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout per endpoint
       
       try {
-        console.log(`[OverpassService] Attempting endpoint ${i + 1}/${shuffled.length}: ${url}`);
+        log(`Querying mirror ${i + 1}/${shuffled.length}: ${host} (30s timeout)...`);
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -51,7 +59,7 @@ out geom;`;
         clearTimeout(timeoutId);
         
         if (response.status === 429 || response.status === 504) {
-          console.warn(`[OverpassService] Endpoint ${url} rate-limited or gateway timeout (${response.status}). Trying next.`);
+          log(`Mirror ${host} returned status ${response.status} (Rate Limited/Timeout). Trying next mirror...`, 'warn');
           lastError = new Error(`Overpass API ${url} responded with HTTP ${response.status}`);
           // Small breathing gap before next endpoint
           await new Promise(r => setTimeout(r, 500));
@@ -59,20 +67,26 @@ out geom;`;
         }
         
         if (!response.ok) {
-          console.warn(`[OverpassService] Endpoint ${url} responded with status: ${response.status}`);
+          log(`Mirror ${host} returned error code ${response.status}. Trying next mirror...`, 'warn');
           lastError = new Error(`Overpass API ${url} responded with HTTP ${response.status}`);
           continue;
         }
         
         const data = await response.json();
+        if (data && data.remark && data.remark.includes('runtime error')) {
+          log(`Mirror ${host} succeeded but returned runtime error in remark: "${data.remark}". Trying next...`, 'warn');
+          lastError = new Error(`Overpass API ${url} runtime error: ${data.remark}`);
+          continue;
+        }
+        
         if (data && (data.elements || data.remark)) {
-          console.log(`[OverpassService] Successfully fetched OSM data from: ${url} (${data.elements?.length || 0} elements)`);
+          log(`Success! Fetched ${data.elements?.length || 0} spatial features from ${host}`, 'success');
           return data;
         }
       } catch (err) {
         clearTimeout(timeoutId);
-        const reason = err.name === 'AbortError' ? 'timeout (30s)' : err.message;
-        console.warn(`[OverpassService] Failed endpoint ${url}: ${reason}`);
+        const reason = err.name === 'AbortError' ? 'Timeout (30s exceeded)' : err.message;
+        log(`Mirror ${host} failed: ${reason}`, 'error');
         lastError = err;
         // Breathing gap before next attempt
         if (i < shuffled.length - 1) {

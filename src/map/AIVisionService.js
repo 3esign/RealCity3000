@@ -20,13 +20,21 @@ export class AIVisionService {
     }
 
     const systemPrompt = `You are a satellite image interpretation system for urban planning.
-Given this satellite image, identify zones and return a structured JSON mapping:
+Given this satellite image, identify zones and return a structured JSON mapping.
+For coordinates, you can use EITHER coordinate pairs [x, y] OR bounding boxes [minX, minY, maxX, maxY].
+For example, "water": [[5, 5], [10, 10, 15, 15]] means cell (5,5) and a rectangle from (10,10) to (15,15).
+Map features to this JSON format:
 {
-  "brownfields": [[x1, y1], [x2, y2]],
-  "vacantLots": [[x1, y1]],
-  "denseForests": [[x1, y1]]
+  "water": [],
+  "roads": [],
+  "residential": [],
+  "commercial": [],
+  "industrial": [],
+  "denseForests": [],
+  "brownfields": [],
+  "vacantLots": []
 }
-Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}.`;
+Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}. Keep classifications logical and realistic based on the visual features.`;
 
     try {
       if (provider === 'openrouter') {
@@ -106,8 +114,12 @@ Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}.`;
     const vacantLots = [];
     const denseForests = [];
     const water = [];
+    const roads = [];
+    const residential = [];
+    const commercial = [];
+    const industrial = [];
     
-    // Seed a mock satellite water body (diagonal river/lake in center-left)
+    // Seed water body (river in center-left)
     for (let y = 0; y < h; y++) {
       const x = Math.floor(w * 0.15 + Math.sin(y * 0.1) * 3);
       for (let dx = -2; dx <= 2; dx++) {
@@ -117,7 +129,34 @@ Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}.`;
       }
     }
 
-    // Seed a mock dense forest cluster (top-right quadrant)
+    // Seed major roads (horizontal & vertical)
+    const midY = Math.floor(h / 2);
+    const midX = Math.floor(w / 2);
+    for (let x = 0; x < w; x++) {
+      roads.push([x, midY]);
+    }
+    for (let y = 0; y < h; y++) {
+      roads.push([midX, y]);
+    }
+
+    // Seed residential blocks
+    const rMinX = Math.floor(w * 0.55);
+    const rMaxX = Math.floor(w * 0.9);
+    const rMinY = Math.floor(h * 0.55);
+    const rMaxY = Math.floor(h * 0.9);
+    residential.push([rMinX, rMinY, rMaxX, rMaxY]);
+
+    // Seed commercial around central crossroads
+    commercial.push([midX - 3, midY - 3, midX + 3, midY + 3]);
+
+    // Seed industrial near brownfield
+    const iMinX = Math.floor(w * 0.35);
+    const iMaxX = Math.floor(w * 0.48);
+    const iMinY = Math.floor(h * 0.1);
+    const iMaxY = Math.floor(h * 0.35);
+    industrial.push([iMinX, iMinY, iMaxX, iMaxY]);
+
+    // Seed dense forests
     const fx = Math.floor(w * 0.75);
     const fy = Math.floor(h * 0.25);
     for (let dy = -4; dy <= 4; dy++) {
@@ -132,7 +171,7 @@ Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}.`;
       }
     }
 
-    // Seed a mock brownfield cluster
+    // Seed brownfields
     const bx = Math.floor(w * 0.3);
     const by = Math.floor(h * 0.65);
     for (let dy = -2; dy <= 2; dy++) {
@@ -147,7 +186,7 @@ Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}.`;
       }
     }
 
-    // Seed vacant lots randomly
+    // Seed vacant lots
     for (let i = 0; i < 8; i++) {
       vacantLots.push([
         Math.floor(Math.random() * (w - 4)) + 2,
@@ -155,7 +194,7 @@ Format coordinates in a grid scaled to ${state.gridWidth}x${state.gridHeight}.`;
       ]);
     }
 
-    return { brownfields, vacantLots, denseForests, water };
+    return { brownfields, vacantLots, denseForests, water, roads, residential, commercial, industrial };
   }
 }
 export default AIVisionService;

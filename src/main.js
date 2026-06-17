@@ -107,6 +107,132 @@ function setupPhase1Listeners() {
   document.getElementById('history-api-key').addEventListener('input', saveKeys);
   document.getElementById('universal-provider').addEventListener('change', saveKeys);
 
+  // Helper to log messages in the loading terminal console
+  function logToLoader(message, type = 'info') {
+    const container = document.getElementById('loading-log-container');
+    if (!container) return;
+    const time = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    line.style.marginBottom = '4px';
+    line.style.borderBottom = '1px dashed rgba(255, 255, 255, 0.05)';
+    line.style.paddingBottom = '2px';
+    
+    if (type === 'error') {
+      line.style.color = '#ff6b6b';
+    } else if (type === 'warn') {
+      line.style.color = '#ffd43b';
+    } else if (type === 'success') {
+      line.style.color = '#51cf66';
+    } else {
+      line.style.color = '#00f0ff';
+    }
+    line.innerHTML = `<strong>[${time}]</strong> ${message}`;
+    container.appendChild(line);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  // Helper to complete initialization pipeline once vector data is parsed or bypassed
+  async function completeInitialization(parsed, rawOsm, isBypassed = false) {
+    const state = store.getState();
+    const loader = document.getElementById('simulation-loading');
+    const statusText = document.getElementById('loading-status-text');
+
+    if (isBypassed) {
+      logToLoader('Running grid initialization using AI Satellite Spectrum analysis ONLY...', 'warn');
+    }
+
+    // 2. Fetch Historical Research timeline context asynchronously
+    statusText.textContent = 'Fetching historical context...';
+    logToLoader('Fetching historical research timeline context...', 'info');
+    historicalService.fetchHistoricalContext(state.bbox).then(historyText => {
+      store.updateState({ historicalReport: historyText });
+      logToLoader('Historical research timeline context loaded.', 'success');
+    });
+
+    // 3. Run Satellite Spectrum Analysis first to establish the base landuse grid
+    statusText.textContent = 'Analyzing satellite spectrum for natural and brownfield layouts...';
+    logToLoader('Requesting ESRI static satellite tile for analysis...', 'info');
+    let visionResult = null;
+    try {
+      const esriStaticUrl = `https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=${state.bbox.west},${state.bbox.south},${state.bbox.east},${state.bbox.north}&bboxSR=4326&imageSR=4326&size=500,500&format=png&f=image`;
+      logToLoader(`Static Satellite URL generated. Length: ${esriStaticUrl.length} chars.`, 'info');
+      
+      const hasKey = state.aiUseUniversal ? state.aiKeys.universal : state.aiKeys.vision;
+      if (hasKey) {
+        logToLoader('Sending image URL to AI Vision Service for landuse analysis...', 'info');
+      } else {
+        logToLoader('No AI Key provided for Vision Service. Vision analysis will use simulation mock.', 'warn');
+      }
+      
+      visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl);
+      if (visionResult) {
+        logToLoader('AI Satellite analysis completed successfully.', 'success');
+        if (visionResult.water) logToLoader(`AI detected: ${visionResult.water.length} water bodies/zones.`, 'info');
+        if (visionResult.roads) logToLoader(`AI detected: ${visionResult.roads.length} road networks/corridors.`, 'info');
+        if (visionResult.residential) logToLoader(`AI detected: ${visionResult.residential.length} residential neighborhoods.`, 'info');
+        if (visionResult.commercial) logToLoader(`AI detected: ${visionResult.commercial.length} commercial zones.`, 'info');
+        if (visionResult.industrial) logToLoader(`AI detected: ${visionResult.industrial.length} industrial complexes.`, 'info');
+      }
+    } catch (visionErr) {
+      logToLoader(`AI Vision processing failed, utilizing standard base layout fallback: ${visionErr.message}`, 'warn');
+    }
+
+    // 4. Grid Generation (Satellite base first, then overlay OSM highways & building footprints)
+    statusText.textContent = 'Rasterizing cell connectivity and overlaying OSM vectors...';
+    logToLoader('Rasterizing simulation grid cells and geometry networks...', 'info');
+    const grid = gridGenerator.generateGrid(
+      state.bbox,
+      parsed,
+      state.gridWidth,
+      state.gridHeight,
+      visionResult
+    );
+
+    // 5. Update Store
+    logToLoader('Updating simulation state variables...', 'info');
+    store.updateState({
+      grid: grid,
+      originalGrid: grid.map(row => row.map(c => ({ ...c }))),
+      osmRawData: rawOsm,
+      buildings: parsed.buildings,
+      roads: parsed.roads,
+      water: parsed.water,
+      simulationYear: 2017,
+      metricsHistory: [{
+        year: 2017,
+        population: 0,
+        urbanDensityPct: 0.0,
+        averageLandValue: 10.0,
+        pollutionIndex: 0.0
+      }]
+    });
+
+    // Switch View Phase FIRST so DOM parent containers have actual non-zero clientWidth/clientHeight
+    document.getElementById('view-map').classList.remove('active');
+    document.getElementById('view-map').classList.add('hidden');
+    document.getElementById('view-sandbox').classList.remove('hidden');
+    document.getElementById('view-sandbox').classList.add('active');
+
+    // 6. Initialize visualizers
+    logToLoader('Initializing Canvas 2D and Three.js 3D renderers...', 'info');
+    canvas2D = new Canvas2DRenderer('canvas-2d');
+    three3D = new ThreeJSRenderer('canvas-3d-container');
+    
+    canvas2D.draw();
+    three3D.rebuildScene();
+    
+    // Initial step calculation for dashboards
+    simulationEngine.runStep();
+    dashboard.updateDashboard();
+
+    // Update coordinates readout
+    const midLat = ((state.bbox.south + state.bbox.north) / 2).toFixed(5);
+    const midLng = ((state.bbox.west + state.bbox.east) / 2).toFixed(5);
+    document.getElementById('toolbar-bbox-coords').textContent = `LAT: ${midLat}, LNG: ${midLng} // AREA: ${(state.gridWidth * state.gridHeight).toLocaleString()} cells`;
+    
+    logToLoader('Simulation sandbox initialized and ready!', 'success');
+  }
+
   // Initialize sandbox extraction button
   const extractBtn = document.getElementById('extract-data-btn');
   extractBtn.addEventListener('click', async () => {
@@ -118,17 +244,23 @@ function setupPhase1Listeners() {
     // Show loading spinner overlay
     const loader = document.getElementById('simulation-loading');
     const statusText = document.getElementById('loading-status-text');
+    const logContainer = document.getElementById('loading-log-container');
+    
     loader.classList.remove('hidden');
+    if (logContainer) logContainer.innerHTML = ''; // Clear logs
+    logToLoader('Initializing simulation grid extraction pipeline...', 'info');
 
-    // Remove any previous retry button
-    const existingRetryBtn = loader.querySelector('.retry-extract-btn');
-    if (existingRetryBtn) existingRetryBtn.remove();
+    // Remove any previous action buttons
+    loader.querySelectorAll('.retry-extract-btn, .bypass-ai-btn, .action-buttons-wrapper').forEach(btn => btn.remove());
 
     try {
       // 1. Fetch OSM Vector Data with automatic retry + exponential backoff
       statusText.textContent = 'Querying OpenStreetMap Overpass API...';
-      let parsed;
+      let parsed = null;
       let rawOsm = null;
+      let osmFailed = false;
+
+      logToLoader('Querying OpenStreetMap Overpass servers...', 'info');
       const MAX_RETRIES = 4;
       const BASE_DELAY_MS = 2000;
 
@@ -137,103 +269,83 @@ function setupPhase1Listeners() {
           statusText.textContent = attempt === 1
             ? 'Querying OpenStreetMap Overpass API...'
             : `Retrying Overpass API (attempt ${attempt}/${MAX_RETRIES})...`;
-          rawOsm = await overpassService.fetchMapData(state.bbox);
+          
+          if (attempt > 1) {
+            logToLoader(`Retrying Overpass API (attempt ${attempt}/${MAX_RETRIES})...`, 'warn');
+          }
+          
+          rawOsm = await overpassService.fetchMapData(state.bbox, logToLoader);
           statusText.textContent = 'Parsing geometries and highways...';
+          logToLoader('OpenStreetMap data fetched successfully. Parsing geometries...', 'success');
           parsed = overpassService.parseGeometries(rawOsm);
           break; // Success — exit retry loop
         } catch (osmErr) {
-          console.warn(`OSM attempt ${attempt}/${MAX_RETRIES} failed:`, osmErr.message);
+          logToLoader(`OSM query attempt ${attempt}/${MAX_RETRIES} failed: ${osmErr.message}`, 'error');
           if (attempt < MAX_RETRIES) {
             const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
             statusText.textContent = `Overpass API busy. Waiting ${(delay / 1000).toFixed(0)}s before retry ${attempt + 1}/${MAX_RETRIES}...`;
+            logToLoader(`Waiting ${(delay / 1000).toFixed(0)}s before retrying...`, 'info');
             await new Promise(resolve => setTimeout(resolve, delay));
           } else {
-            // All retries exhausted — show retry button instead of alert
-            statusText.textContent = 'OpenStreetMap Overpass API is currently overloaded. Click below to try again.';
-            const retryBtn = document.createElement('button');
-            retryBtn.className = 'btn btn-accent retry-extract-btn';
-            retryBtn.style.cssText = 'margin-top: 16px; padding: 10px 24px; font-size: 14px; cursor: pointer;';
-            retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry Extraction';
-            retryBtn.addEventListener('click', () => {
-              retryBtn.remove();
-              extractBtn.click();
-            });
-            loader.querySelector('.loading-content, .loader-container, div')?.appendChild(retryBtn)
-              || loader.appendChild(retryBtn);
-            return; // Exit — loader stays visible with retry button
+            osmFailed = true;
           }
         }
       }
 
-      // 2. Fetch Historical Research timeline context asynchronously
-      statusText.textContent = 'Fetching historical context...';
-      historicalService.fetchHistoricalContext(state.bbox).then(historyText => {
-        store.updateState({ historicalReport: historyText });
-      });
+      if (osmFailed) {
+        logToLoader('All Overpass API attempts failed. OSM server is overloaded or timed out.', 'error');
+        statusText.textContent = 'OSM Query Failed. Select action to proceed:';
 
-      // 3. Run Satellite Spectrum Analysis first to establish the base landuse grid
-      statusText.textContent = 'Analyzing satellite spectrum for natural and brownfield layouts...';
-      let visionResult = null;
-      try {
-        const esriStaticUrl = `https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=${state.bbox.west},${state.bbox.south},${state.bbox.east},${state.bbox.north}&bboxSR=4326&imageSR=4326&size=500,500&format=png&f=image`;
-        visionResult = await aiVisionService.analyzeSatelliteImage(esriStaticUrl);
-      } catch (visionErr) {
-        console.warn('AI Vision processing failed, utilizing standard base layout.', visionErr);
+        const btnWrapper = document.createElement('div');
+        btnWrapper.className = 'action-buttons-wrapper';
+        btnWrapper.style.cssText = 'margin-top: 16px; display: flex; gap: 12px; justify-content: center;';
+
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'btn btn-accent retry-extract-btn';
+        retryBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
+        retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry OSM';
+        retryBtn.addEventListener('click', () => {
+          btnWrapper.remove();
+          extractBtn.click();
+        });
+
+        const bypassBtn = document.createElement('button');
+        bypassBtn.className = 'btn btn-secondary bypass-ai-btn';
+        bypassBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
+        bypassBtn.innerHTML = '<i class="fa-solid fa-brain"></i> Bypass using AI Satellite';
+        bypassBtn.addEventListener('click', async () => {
+          btnWrapper.remove();
+          if (logContainer) logContainer.innerHTML = '';
+          logToLoader('User selected OSM Bypass. Initializing pure Satellite Simulation...', 'warn');
+          try {
+            await completeInitialization({ buildings: [], roads: [], water: [] }, null, true);
+          } catch (bypassErr) {
+            console.error('Bypass initialization error:', bypassErr);
+            statusText.textContent = `Bypass Error: ${bypassErr.message}`;
+            logToLoader(`Bypass failed: ${bypassErr.message}`, 'error');
+          } finally {
+            if (!loader.querySelector('.action-buttons-wrapper')) {
+              loader.classList.add('hidden');
+            }
+          }
+        });
+
+        btnWrapper.appendChild(retryBtn);
+        btnWrapper.appendChild(bypassBtn);
+        
+        loader.querySelector('.loading-content, .loader-container, div')?.appendChild(btnWrapper)
+          || loader.appendChild(btnWrapper);
+        return; // Exit click handler - loader remains visible with buttons
       }
 
-      // 4. Grid Generation (Satellite base first, then overlay OSM highways & building footprints)
-      statusText.textContent = 'Rasterizing cell connectivity and overlaying OSM vectors...';
-      const grid = gridGenerator.generateGrid(
-        state.bbox,
-        parsed,
-        state.gridWidth,
-        state.gridHeight,
-        visionResult
-      );
-
-      // 5. Update Store
-      store.updateState({
-        grid: grid,
-        originalGrid: grid.map(row => row.map(c => ({ ...c }))),
-        osmRawData: rawOsm,
-        buildings: parsed.buildings,
-        roads: parsed.roads,
-        water: parsed.water,
-        simulationYear: 2017,
-        metricsHistory: [{
-          year: 2017,
-          population: 0,
-          urbanDensityPct: 0.0,
-          averageLandValue: 10.0,
-          pollutionIndex: 0.0
-        }]
-      });
-
-      // Switch View Phase FIRST so DOM parent containers have actual non-zero clientWidth/clientHeight
-      document.getElementById('view-map').classList.remove('active');
-      document.getElementById('view-map').classList.add('hidden');
-      document.getElementById('view-sandbox').classList.remove('hidden');
-      document.getElementById('view-sandbox').classList.add('active');
-
-      // 6. Initialize visualizers
-      canvas2D = new Canvas2DRenderer('canvas-2d');
-      three3D = new ThreeJSRenderer('canvas-3d-container');
-      
-      canvas2D.draw();
-      three3D.rebuildScene();
-      
-      // Initial step calculation for dashboards
-      simulationEngine.runStep();
-      dashboard.updateDashboard();
-
-      // Update coordinates readout
-      const midLat = ((state.bbox.south + state.bbox.north) / 2).toFixed(5);
-      const midLng = ((state.bbox.west + state.bbox.east) / 2).toFixed(5);
-      document.getElementById('toolbar-bbox-coords').textContent = `LAT: ${midLat}, LNG: ${midLng} // AREA: ${(state.gridWidth * state.gridHeight).toLocaleString()} cells`;
+      // Success flow
+      await completeInitialization(parsed, rawOsm, false);
 
     } catch (err) {
       console.error('Initialization error:', err);
       statusText.textContent = `Error: ${err.message}`;
+      logToLoader(`Initialization failed with error: ${err.message}`, 'error');
+      
       const retryBtn = document.createElement('button');
       retryBtn.className = 'btn btn-accent retry-extract-btn';
       retryBtn.style.cssText = 'margin-top: 16px; padding: 10px 24px; font-size: 14px; cursor: pointer;';
@@ -246,8 +358,8 @@ function setupPhase1Listeners() {
         || loader.appendChild(retryBtn);
       return; // Keep loader visible with error + retry
     } finally {
-      // Only hide loader if no retry button is present
-      if (!loader.querySelector('.retry-extract-btn')) {
+      // Only hide loader if no action buttons are present
+      if (!loader.querySelector('.retry-extract-btn') && !loader.querySelector('.action-buttons-wrapper')) {
         loader.classList.add('hidden');
       }
     }
