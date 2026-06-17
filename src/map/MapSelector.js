@@ -16,8 +16,8 @@ export class MapSelector {
   }
 
   initMap() {
-    // New York coordinates default
-    const defaultCenter = [40.7128, -74.0060];
+    // Novi Pazar coordinates default
+    const defaultCenter = [43.1367, 20.5122];
     const defaultZoom = 14;
 
     this.map = L.map('map-selection-viewport', {
@@ -27,7 +27,7 @@ export class MapSelector {
 
     // ESRI satellite tile layer
     const satelliteLayer = L.tileLayer(
-      'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       {
         maxZoom: 19,
         attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
