@@ -309,8 +309,18 @@ function setupPhase1Listeners() {
           }
         });
 
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn btn-secondary cancel-extract-btn';
+        cancelBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer; background-color: #1e293b; color: #94a3b8; border: 1px solid #334155;';
+        cancelBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel & Go Back';
+        cancelBtn.addEventListener('click', () => {
+          btnWrapper.remove();
+          loader.classList.add('hidden');
+        });
+
         btnWrapper.appendChild(retryBtn);
         btnWrapper.appendChild(bypassBtn);
+        btnWrapper.appendChild(cancelBtn);
         
         loader.querySelector('.loading-content, .loader-container, div')?.appendChild(btnWrapper)
           || loader.appendChild(btnWrapper);
@@ -325,17 +335,34 @@ function setupPhase1Listeners() {
       statusText.textContent = `Error: ${err.message}`;
       logToLoader(`Initialization failed with error: ${err.message}`, 'error');
       
+      const btnWrapper = document.createElement('div');
+      btnWrapper.className = 'action-buttons-wrapper';
+      btnWrapper.style.cssText = 'margin-top: 16px; display: flex; gap: 12px; justify-content: center;';
+
       const retryBtn = document.createElement('button');
       retryBtn.className = 'btn btn-accent retry-extract-btn';
-      retryBtn.style.cssText = 'margin-top: 16px; padding: 10px 24px; font-size: 14px; cursor: pointer;';
+      retryBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer;';
       retryBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Retry Extraction';
       retryBtn.addEventListener('click', () => {
-        retryBtn.remove();
+        btnWrapper.remove();
         extractBtn.click();
       });
-      loader.querySelector('.loading-content, .loader-container, div')?.appendChild(retryBtn)
-        || loader.appendChild(retryBtn);
-      return; // Keep loader visible with error + retry
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-secondary cancel-extract-btn';
+      cancelBtn.style.cssText = 'padding: 10px 20px; font-size: 13px; cursor: pointer; background-color: #1e293b; color: #94a3b8; border: 1px solid #334155;';
+      cancelBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel & Go Back';
+      cancelBtn.addEventListener('click', () => {
+        btnWrapper.remove();
+        loader.classList.add('hidden');
+      });
+
+      btnWrapper.appendChild(retryBtn);
+      btnWrapper.appendChild(cancelBtn);
+
+      loader.querySelector('.loading-content, .loader-container, div')?.appendChild(btnWrapper)
+        || loader.appendChild(btnWrapper);
+      return; // Keep loader visible with error + action buttons
     } finally {
       // Only hide loader if no action buttons are present
       if (!loader.querySelector('.retry-extract-btn') && !loader.querySelector('.action-buttons-wrapper')) {
