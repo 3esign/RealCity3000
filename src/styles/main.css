@@ -1102,6 +1102,44 @@ html, body {
   border-bottom: 1px solid rgba(255,255,255,0.02);
   padding-bottom: 2px;
 }
+/* AI Status Ticker Styles */
+.ai-status-ticker {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.ai-status-ticker.hidden {
+  opacity: 0;
+  transform: translate(-50%, -20px);
+}
+
+.ai-pulse-icon {
+  color: var(--accent);
+  animation: aiPulse 1.5s infinite alternate;
+}
+
+@keyframes aiPulse {
+  0% { text-shadow: 0 0 4px var(--accent); opacity: 0.7; }
+  100% { text-shadow: 0 0 12px var(--accent); opacity: 1; }
+}
+
 
 /* Chatbox Panel Styles */
 .chatbox-panel {

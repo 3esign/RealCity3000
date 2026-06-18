@@ -934,6 +934,13 @@ function setupPhase2Listeners() {
       statusText.style.color = 'var(--accent-amber)';
     }
     if (statusDot) statusDot.className = 'ai-ticker-dot thinking';
+
+    const ticker = document.getElementById('ai-status-ticker');
+    const tickerText = document.getElementById('ai-status-text');
+    if (ticker && tickerText) {
+      ticker.classList.remove('hidden');
+      tickerText.textContent = 'AI Mayor evaluating city zoning parameters...';
+    }
   });
 
   eventBus.on('ai-thinking-completed', (data) => {
@@ -955,6 +962,13 @@ function setupPhase2Listeners() {
       if (pingEl) pingEl.textContent = `Ping: ${data.latency} ms`;
       if (pulseEl) pulseEl.textContent = `Pulse: ${data.pulse}`;
     }
+
+    const ticker = document.getElementById('ai-status-ticker');
+    const tickerText = document.getElementById('ai-status-text');
+    if (ticker && tickerText) {
+      tickerText.textContent = 'AI Mayor parameter adjustments applied.';
+      setTimeout(() => ticker.classList.add('hidden'), 3000);
+    }
   });
 
   eventBus.on('ai-thinking-failed', (data) => {
@@ -968,6 +982,14 @@ function setupPhase2Listeners() {
     
     const thoughtsContent = document.getElementById('ai-thought-content');
     if (thoughtsContent) thoughtsContent.textContent = `Connection failed: ${data.error || 'Unknown error'}`;
+
+    const ticker = document.getElementById('ai-status-ticker');
+    const tickerText = document.getElementById('ai-status-text');
+    if (ticker && tickerText) {
+      ticker.classList.remove('hidden');
+      tickerText.textContent = 'AI Mayor offline: Connection failed.';
+      setTimeout(() => ticker.classList.add('hidden'), 4000);
+    }
   });
 
   // Historical Validation trigger
