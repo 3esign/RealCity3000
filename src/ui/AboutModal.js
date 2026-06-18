@@ -138,7 +138,7 @@ export function getMethodologyHTML() {
 
       <hr style="border: 0; border-top: 1px solid var(--border-solid); margin: 16px 0;" />
       <p style="text-align: center; font-size: 10px; font-family: var(--font-mono); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;">
-        RealCity3000 &copy; Developed by Union Nikola Tesla University Academic Staff Team
+        RealCity3000 &copy; Developed by PhD Poturak Semir & Union Nikola Tesla University Academic Staff Team
       </p>
     </div>
   `;

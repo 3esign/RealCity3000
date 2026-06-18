@@ -51,7 +51,7 @@ export class ExportService {
   downloadTextReport() {
     const state = store.getState();
     const mdContent = `# RealCity3000 // Scientific Transparency & Revision Report
-Developed by: Union Nikola Tesla University Academic Staff Team
+Developed by: PhD Poturak Semir & Union Nikola Tesla University Academic Staff Team
 Generated on: ${new Date().toLocaleString()}
 
 ## 1. Executive Summary & Code Integrity
@@ -302,7 +302,7 @@ RealCity3000 cross-validates deterministic OSM cadastral vectors (Source 1) with
       let reportContent = `======================================================================
 REALCITY3000 // SIMULATION RUN REPORT & ACCURACY AUDIT
 ======================================================================
-Academic Team: Union Nikola Tesla University Academic Staff Team
+Academic Team: PhD Poturak Semir & Union Nikola Tesla University Academic Staff Team
 Report Generated: ${new Date().toLocaleString()}
 
 ----------------------------------------------------------------------

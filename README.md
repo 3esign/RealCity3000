@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Built With](https://img.shields.io/badge/Built_With-Three.js_+_Leaflet_+_Vite-8b5cf6?style=for-the-badge)](#-technology-stack)
 
-*Developed by the Union Nikola Tesla University Academic Staff Team, Belgrade*
+*Developed by PhD Poturak Semir & Union Nikola Tesla University Academic Staff Team, Belgrade*
 
 ---
 
@@ -240,8 +240,11 @@ To enable AI Mayor advice and satellite classification:
 
 ## 👥 Authors
 
+**PhD Poturak Semir** - Creator & Leader of the Development Team  
 **Union Nikola Tesla University Academic Staff Team**  
 *Nikola Tesla University, Belgrade*
+
+**Contact:** [poturaksemir@gmail.com](mailto:poturaksemir@gmail.com)
 
 ---
 <p align="center">

@@ -64,7 +64,7 @@ export function generateReportHTML(state) {
 </head>
 <body>
   <h1>RealCity3000 // Scientific Urban Growth Report</h1>
-  <p>Developed by: <strong>Union Nikola Tesla University Academic Staff Team</strong></p>
+  <p>Developed by: <strong>PhD Poturak Semir & Union Nikola Tesla University Academic Staff Team</strong></p>
   <p>Report generated dynamically on: <strong>${new Date().toLocaleString()}</strong></p>
 
   <h2>1. Active Simulation State</h2>
@@ -104,7 +104,7 @@ export function generateReportHTML(state) {
   </table>
 
   <hr>
-  <p style="text-align: center; font-size: 11px; color: #64748b;">RealCity3000 Open-Source GIS Urban Planning Sandbox. Developed by Union Nikola Tesla University Academic Staff Team. Generated locally via browser engine.</p>
+  <p style="text-align: center; font-size: 11px; color: #64748b;">RealCity3000 Open-Source GIS Urban Planning Sandbox. Developed by PhD Poturak Semir & Union Nikola Tesla University Academic Staff Team. Generated locally via browser engine.</p>
 </body>
 </html>`;
 }
