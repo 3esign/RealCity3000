@@ -46,16 +46,16 @@ flowchart LR
 ### Step 1: Geographic Data Acquisition
 
 You draw a bounding box on the satellite map. RealCity3000 simultaneously:
-- Queries **5 redundant Overpass API endpoints** for OpenStreetMap vector data (buildings, highways, waterways, land use polygons)
-- Fetches an **ESRI satellite tile** and sends it to an AI vision model for terrain classification
-- Runs a **performance benchmark** to auto-calibrate grid resolution to your hardware
+- Queries **5 redundant Overpass API endpoints** for OpenStreetMap vector data (buildings, highways, waterways, land use polygons) with a local proxy fallback and mirror rotation.
+- Fetches an **ESRI satellite tile** and sends it to an AI vision model for terrain classification (detecting forests, brownfields, vacant lots).
+- Runs a **performance benchmark** to auto-calibrate grid resolution to your hardware.
 
 ### Step 2: Dual-Source Spatial Fusion
 
 The raw data is fused into a unified land-use grid:
-- **Bresenham's Line Algorithm** rasterizes road networks into cell connectivity paths
-- **Point-in-Polygon** tests project building footprints onto grid cells
-- **AI-classified overlays** seed forests, brownfields, and vacant lots from satellite imagery
+- **Bresenham's Line Algorithm** rasterizes road networks into cell connectivity paths.
+- **Point-in-Polygon** tests project building footprints onto grid cells.
+- **AI-classified overlays** seed forests, brownfields, and vacant lots from satellite imagery.
 - Each cell stores 12+ attributes: type, density, elevation, road access, land value, pollution, population, etc.
 
 ### Step 3: Simulation Execution
@@ -75,105 +75,110 @@ flowchart TD
 
 ---
 
+## 🤖 AI Mayor Governance Loop
+
+To bridge the gap between simulation rules and dynamic policy-making, RealCity3000 includes an interactive **AI Mayor governance loop**. The AI Mayor reads the simulation's state and the user's high-level guidelines, proposing tax adjustments, land protection acts, and zoning caps.
+
+```mermaid
+sequenceDiagram
+    participant User as Human Planner (Chat/UI)
+    participant Engine as Simulation Engine (1 Year Tick)
+    participant Mayor as AIMayorService
+    participant Adapter as AIProviderAdapter (OpenRouter)
+    participant Store as State Store (Redux-like)
+
+    Engine->>Mayor: runMayorTurn() (if aiMayorEnabled)
+    Note over Mayor: Gathers current metrics (RCI, Land Value, Pop, Pollution)
+    User->>Mayor: addUserInstruction(text) (via chatbox)
+    Mayor->>Adapter: sendRequest(systemPrompt, userPrompt)
+    Note over Adapter: LLM processes guidelines & instructions
+    Adapter-->>Mayor: Returns JSON { reasoning, actions }
+    Mayor->>Store: Updates params (e.g. taxRate, greenProtection)
+    Mayor->>User: Broadcasts CustomEvent 'ai-mayor-response' (reasoning)
+    Store->>Engine: Applies updated parameters to next CA/ABM simulation step
+```
+
+---
+
 ## 🎨 Visual Showcase
 
-### 🗺️ Map Selection & Data Extraction
-Select any region on Earth. The satellite map lets you draw a bounding box, configure grid resolution, and optionally provide AI API keys for enhanced terrain classification.
+### 1. Map Selection & Bounding Box Extraction
+Draw a bounding box anywhere on Earth. RealCity3000 queries Overpass API servers and pulls satellite imagery to build the baseline simulation grid.
 
 ![Map Selection Interface](./images/map_selection_loading.png)
 
-### 📐 2D Grid Simulation View
-The core simulation view renders each grid cell by its land-use classification. Watch buildings appear, roads attract development, and commercial centers emerge organically as the simulation progresses year by year.
+### 2. 2D Simulation Growth Progression
+Observe the evolution of the city grid over time. The 2D grid updates live with land use classifications, developer activity, and simulation heatmaps.
 
-![2D Simulation — Year 2032 Dense Growth](./images/sandbox_2d_year2032.png)
+| Early Growth (Procedural Start) | Mid-Growth Development | Mature High-Density City |
+| :---: | :---: | :---: |
+| ![Early Growth](./images/sandbox_2d_early.png) | ![Mid Growth](./images/sandbox_2d_midgrowth.png) | ![Mature City](./images/sandbox_2d_dense.png) |
 
-### 🔮 Urban Growth Over Time
-Compare early-stage development (sparse residential clusters) with late-stage patterns (dense polycentric growth with commercial corridors):
+### 3. Simulation Metrics Dashboard
+Analyze the city's health, demographics, and RCI (Residential, Commercial, Industrial) demand curves through a comprehensive real-time dashboard.
 
-| Early Development (Year ~2670) | Dense Urban Fabric (Year ~2072) |
-|:---:|:---:|
-| ![Early Growth](./images/sandbox_2d_early.png) | ![Dense Growth](./images/sandbox_2d_dense.png) |
+![Simulation Metrics Dashboard](./images/sandbox_2d_year2032.png)
 
-### 🎮 First-Person Street Explorer (FPS Mode)
-Walk through your simulated city at ground level. Commercial towers glow cyan, residential blocks in warm amber, industrial facilities in deep purple. Trees dot the parks and boulevards.
+### 4. 3D WebGL Voxel Viewer
+Transition to a fully interactive 3D WebGL mode powered by GPU-instanced meshes in Three.js, visualizing urban density peaks, buildings, and land value layers.
+
+| 3D Simulation Overview | 3D Early Growth Peaks | 3D Mature Polycentric Peaks |
+| :---: | :---: | :---: |
+| ![3D Overview](./images/simulation_3d_overview.png) | ![3D Early](./images/simulation_3d_early.png) | ![3D Mature](./images/simulation_3d_mature.png) |
+
+### 5. First-Person Street Explorer (FPS Mode)
+Drop down to street level and explore the simulated city in first-person. Amber cells render as residential homes, cyan cells as skyscrapers, and purple cells as industrial complexes.
 
 ![FPS Ground-Level Explorer](./images/fps_ground_explorer.png)
 
 ---
 
-## 🧮 Mathematical Framework
-
-RealCity3000 implements four interconnected scientific models. Each is grounded in published urban science literature.
+## 🧮 Mathematical Framework & Parameters
 
 ### A. Forrester System Dynamics (Macro-Economic Engine)
-
-The city's economy is modeled as a **stocks-and-flows** feedback system inspired by Jay Forrester's *Urban Dynamics* (1969). Three coupled stocks — Residential (R), Commercial (C), and Industrial (I) — interact through demand multipliers:
-
-```mermaid
-flowchart LR
-    POP["Population"] -->|"Housing Demand"| R["🏠 Residential Stock"]
-    JOBS["Job Market"] -->|"Office Demand"| C["🏢 Commercial Stock"]
-    C -->|"Supply Chain"| I["🏭 Industrial Stock"]
-    I -->|"Employment"| JOBS
-    R -->|"Consumer Base"| C
-    TAX["Tax Rate"] -.->|"Suppresses"| R
-    TAX -.->|"Suppresses"| C
-    REG["Regulation"]-.->|"Limits"| I
-```
-
-**Demand is computed as:**
+The city's economy is modeled as a stock-and-flow feedback system. Residential ($R$), Commercial ($C$), and Industrial ($I$) stocks interact through coupled differential demand equations:
 
 $$F_{demand}(t) = \text{clamp}\left(\frac{R_{demand} + C_{demand} + I_{demand}}{3}, 0.1, 2.0\right)$$
-
-Where housing demand is driven by the gap between population and available housing:
 
 $$R_{demand} = \text{BaseDemand} \times \left(1 + \frac{\text{HousingGap}}{1000}\right) \times (1 - 0.005 \times \text{TaxRate})$$
 
 ### B. Alonso Bid-Rent Model (Land Value Fields)
-
-Land values follow William Alonso's **Bid-Rent Theory** (1964): property value decays exponentially with distance from commercial centers, creating realistic polycentric value peaks:
+Land values decay exponentially with distance to commercial centers, modified by road accessibility, proximity to green space, and industrial pollution:
 
 $$V(x,y) = V_{\text{base}} \times \text{Access}^{0.6} \times \text{GreenProx}^{0.3} \times (1 - \text{Pollution}^{0.6}) \times e^{-\lambda \cdot d_{com}}$$
 
-Where:
-| Symbol | Meaning | Value |
-|:---|:---|:---|
-| $\lambda$ | Spatial decay constant | 0.015 |
-| $d_{com}$ | Euclidean distance to nearest Commercial cell | Grid units |
-| Access | Road connectivity score | [0, 1] |
-| GreenProx | Proximity to parks/forests | [0, 1] |
-| Pollution | Industrial smoke dispersal (inverse-square) | [0, 1] |
-
 ### C. SLEUTH Cellular Automata (Sprawl Mechanics)
+Land transitions use four Monte Carlo CA rules inspired by the SLEUTH model:
 
-Urban growth is modeled using four **Monte Carlo CA transition rules**, inspired by the SLEUTH model (Clarke, Hoppen & Gaydos, 1997). All transitions are constrained by local carrying capacity $(1 - D_{urban})$ and economic demand $F_{demand}$:
-
-| Rule | Equation | What It Models |
-|:---|:---|:---|
-| **Spontaneous** | $P = \frac{\text{Diffusion}}{2500} \times (1 - \frac{\text{Slope}}{10}) \times (1 - D_{urban}) \times F_{demand}$ | Random nucleation of new urban cells |
-| **Breed** | $P = \frac{\text{Breed}}{150} \times (1 - D_{urban}) \times F_{demand}$ | Newly-born cells becoming permanent growth nuclei |
-| **Edge Growth** | $P = \frac{\text{Spread}}{200} \times N_{urban} \times (1 - D_{urban}) \times F_{demand}$ | Organic agglomeration from urban edges |
-| **Road Gravity** | $P = \frac{\text{RoadGrav}}{200} \times e^{-d_{road}/10} \times (1 - D_{urban}) \times F_{demand}$ | Development attracted to transport corridors |
-
-> $N_{urban}$ = count of developed Moore neighbors (0–8), $d_{road}$ = distance to nearest road
+| Parameter | Mathematical Formulation | Preset Settings | Description |
+| :--- | :--- | :--- | :--- |
+| **Diffusion** | $P = \frac{\text{Diffusion}}{2500} \times (1 - \frac{\text{Slope}}{10}) \times (1 - D_{urban}) \times F_{demand}$ | Natural: `25`<br/>Boom: `50`<br/>Eco: `10`<br/>Sprawl: `75` | Probability of spontaneous nucleation of new urban cells. |
+| **Breed** | $P = \frac{\text{Breed}}{150} \times (1 - D_{urban}) \times F_{demand}$ | Natural: `15`<br/>Boom: `40`<br/>Eco: `5`<br/>Sprawl: `20` | Probability of a new spontaneous cluster developing into a permanent growth center. |
+| **Spread** | $P = \frac{\text{Spread}}{200} \times N_{urban} \times (1 - D_{urban}) \times F_{demand}$ | Natural: `30`<br/>Boom: `60`<br/>Eco: `20`<br/>Sprawl: `15` | Edge growth probability representing organic expansion around existing urban boundaries. |
+| **Road Gravity** | $P = \frac{\text{RoadGrav}}{200} \times e^{-d_{road}/10} \times (1 - D_{urban}) \times F_{demand}$ | Natural: `50`<br/>Boom: `70`<br/>Eco: `30`<br/>Sprawl: `80` | Probability of urban development being attracted to transport corridors. |
 
 ### D. Agent-Based Developer Model (Micro-Economic Decisions)
+Autonomous developer agents scan the grid and build on cells that maximize their discrete utility functions:
 
-Autonomous developer agents scan the grid and build on cells that maximize their **discrete utility function**:
+$$\text{Residential: } U_R = 0.4 \cdot \text{Access} + 0.3 \cdot \text{Green} - 0.2 \cdot \text{Pollution} - 0.1 \cdot V_{land}$$
+$$\text{Commercial: } U_C = 0.4 \cdot \text{LocalPop} + 0.4 \cdot \text{Access} + 0.2 \cdot V_{land}$$
+$$\text{Industrial: } U_I = 0.5 \cdot (1 - V_{land}) + 0.4 \cdot \text{Access} - 0.3 \cdot \text{LocalPop}$$
 
-| Agent Class | Utility $U$ |
-|:---|:---|
-| 🏠 Residential | $U_R = 0.4 \cdot \text{Access} + 0.3 \cdot \text{Green} - 0.2 \cdot \text{Pollution} - 0.1 \cdot V_{land}$ |
-| 🏢 Commercial | $U_C = 0.4 \cdot \text{LocalPop} + 0.4 \cdot \text{Access} + 0.2 \cdot V_{land}$ |
-| 🏭 Industrial | $U_I = 0.5 \cdot (1 - V_{land}) + 0.4 \cdot \text{Access} - 0.3 \cdot \text{LocalPop}$ |
+### E. Policy & Governance Parameters
 
-Each agent type has different preferences: residential developers avoid pollution and seek green space, commercial developers want foot traffic and accessibility, industrial developers seek cheap land away from residents.
+| Parameter | Type / Range | Preset Settings | Description |
+| :--- | :--- | :--- | :--- |
+| **Green Protection** | Percentage `[0, 100]` | Natural: `40`<br/>Boom: `10`<br/>Eco: `90`<br/>Sprawl: `15` | Strength of zoning bans on forest, park, and water cells. |
+| **Tax Rate** | Percentage `[0, 30]` | Natural: `15`<br/>Boom: `5`<br/>Eco: `20`<br/>Sprawl: `8` | Dynamic tax rates; higher taxes suppress macro demand stocks. |
+| **Environmental Reg** | Percentage `[0, 100]` | Natural: `30`<br/>Boom: `10`<br/>Eco: `85`<br/>Sprawl: `20` | Controls pollution penalties and suppresses industrial development. |
+| **Density Cap** | Height Units `[1, 20]` | Natural: `10`<br/>Boom: `18`<br/>Eco: `8`<br/>Sprawl: `4` | Maximum building height/density developer agents can construct. |
+| **Transit Investment** | Percentage `[0, 100]` | Natural: `20`<br/>Boom: `10`<br/>Eco: `85`<br/>Sprawl: `5` | Funding for public transit, increasing access scores of peripheral cells. |
 
 ---
 
 ## 🔬 Validation & Calibration
 
-How do we know the simulation produces realistic results? RealCity3000 includes a built-in scientific validation pipeline:
+RealCity3000 includes a built-in scientific validation pipeline:
 
 ```mermaid
 flowchart LR
@@ -186,127 +191,34 @@ flowchart LR
     E -->|"Yes"| G["✅ Validated<br/>Parameters"]
 ```
 
-### Historical Validation
-The engine clones your loaded map, clears development back to a **2017 baseline**, simulates forward to **2026**, and computes spatial matching metrics against the actual 2026 OSM reality.
-
-### Simulated Annealing Auto-Calibration
-Click **Calibrate** to run a Boltzmann cooling optimization loop that automatically searches for the parameter combination (Diffusion, Spread, Road Gravity) that maximizes F1-Score alignment with reality:
-
-$$T_k = T_0 \times \alpha^k \quad \text{where } T_0 = 0.5, \; \alpha = 0.85$$
-
-$$P(\text{Accept}) = \begin{cases} 1 & \text{if } C(\theta') < C(\theta) \\ e^{-\frac{C(\theta') - C(\theta)}{T_k}} & \text{otherwise} \end{cases}$$
-
 ### Spatial Science Metrics
 
 | Metric | Formula | Interpretation |
-|:---|:---|:---|
-| **Shannon Entropy** | $H = -\frac{\sum_{k=1}^{64} p_k \ln(p_k)}{\ln(64)}$ | Low = compact city, High = dispersed sprawl |
-| **Moran's I** | $I = \frac{N}{S_0} \frac{\sum_i \sum_j w_{ij}(x_i - \bar{x})(x_j - \bar{x})}{\sum_i (x_i - \bar{x})^2}$ | Spatial autocorrelation of land values |
-| **Growth Dispersion** | $GDI = \frac{\text{Spontaneous cells}}{\text{Edge growth cells}}$ | Ratio of random vs. organic growth |
-
----
-
-## 📊 Monte Carlo Forecasting & Sensitivity Analysis
-
-### Monte Carlo Ensemble
-RealCity3000 runs **N parallel simulations** with ±15% parameter perturbation to produce statistical confidence bounds on all key metrics (population, density, land value, pollution):
-
-$$\text{For each run } i: \; \theta_i = \theta_{\text{base}} \times (1 + \mathcal{U}(-0.15, 0.15))$$
-
-Results include mean, median, standard deviation, and 5th/95th percentile confidence intervals.
-
-### One-at-a-Time (OAT) Sensitivity
-Each of the 11 simulation parameters is individually perturbed ±20% while holding all others constant. The output measures which parameters have the largest impact on urban density — critical for understanding model behavior and parameter importance.
-
----
-
-## 🧩 Visual Layer Force Fields
-
-Toggle between four overlay heatmaps to inspect the simulation's internal "force fields" — the hidden variables that drive growth decisions:
-
-| Layer | Color Scale | What It Shows |
-|:---|:---|:---|
-| **Accessibility** | Transparent → Cyan | Road connectivity score per cell |
-| **Land Value** | Transparent → Gold | Bid-Rent derived property value |
-| **Pollution** | Transparent → Purple | Industrial emission dispersal footprint |
-| **Growth Pressure** | Transparent → Red | Current development demand intensity |
-
-Each legend dynamically updates to reflect the active overlay, showing continuous gradient scales with labeled endpoints.
+| :--- | :--- | :--- |
+| **Shannon Entropy** | $H = -\frac{\sum_{k=1}^{64} p_k \ln(p_k)}{\ln(64)}$ | Low = compact, dense city; High = dispersed leapfrog sprawl. |
+| **Moran's I** | $I = \frac{N}{S_0} \frac{\sum_i \sum_j w_{ij}(x_i - \bar{x})(x_j - \bar{x})}{\sum_i (x_i - \bar{x})^2}$ | Spatial autocorrelation of land values; measures clustering of wealth. |
+| **Growth Dispersion** | $GDI = \frac{\text{Spontaneous cells}}{\text{Edge growth cells}}$ | Ratio of random spontaneous development versus organic edge sprawl. |
 
 ---
 
 ## 🛠️ Technology Stack
 
-RealCity3000 runs 100% in the browser with zero server-side computation:
+RealCity3000 runs 100% client-side with zero server-side database requirements:
 
 | Component | Technology | Purpose |
-|:---|:---|:---|
-| 3D Rendering | **Three.js** (`InstancedMesh`) | 60 FPS GPU-instanced building rendering |
-| Map Selection | **Leaflet.js** | Interactive satellite map with bbox drawing |
-| Build Tool | **Vite** | Ultra-fast HMR development & production builds |
-| AI Vision | **OpenRouter / OpenAI** | Optional satellite terrain classification |
-| AI Mayor | **LLM API** | Optional AI-driven policy advisor |
-| Data Source | **OpenStreetMap Overpass API** | Real-world building/road/water vector data |
-| Satellite Tiles | **ESRI World Imagery** | High-resolution satellite base maps |
-| Hosting | **Vercel** | Edge-deployed production hosting |
-
-### Architecture
-
-```mermaid
-graph TD
-    subgraph "Data Acquisition"
-        MAP["MapSelector.js<br/>(Leaflet)"]
-        OSM["OverpassService.js<br/>(5 Endpoints + Retry)"]
-        SAT["AIVisionService.js<br/>(Satellite AI)"]
-    end
-    
-    subgraph "Grid Engine"
-        GEN["GridGenerator.js<br/>(Rasterization)"]
-        SIM["SimulationEngine.js<br/>(Year Stepper)"]
-    end
-    
-    subgraph "Models"
-        SD["SystemsDynamics.js<br/>(Forrester)"]
-        ATT["AttractivenessModel.js<br/>(Bid-Rent)"]
-        PAR["Parameters.js<br/>(Presets & Bounds)"]
-    end
-    
-    subgraph "Visualization"
-        C2D["Canvas2DRenderer.js<br/>(2D Grid)"]
-        C3D["ThreeJSRenderer.js<br/>(WebGL 3D/FPS)"]
-        DASH["MetricsDashboard.js<br/>(Charts)"]
-    end
-    
-    subgraph "Analysis & Export"
-        VAL["ValidationService.js<br/>(F1, Moran, SA)"]
-        EXP["ExportService.js<br/>(Reports, CSV, JSON)"]
-    end
-    
-    MAP --> OSM
-    MAP --> SAT
-    OSM --> GEN
-    SAT --> GEN
-    GEN --> SIM
-    PAR --> SIM
-    SIM --> SD
-    SIM --> ATT
-    SIM --> C2D
-    SIM --> C3D
-    SIM --> DASH
-    SIM --> VAL
-    SIM --> EXP
-```
+| :--- | :--- | :--- |
+| **3D Rendering** | Three.js (`InstancedMesh`) | 60 FPS GPU-instanced building rendering. |
+| **Map Selection** | Leaflet.js | Bounding box drawing on ESRI Satellite tiles. |
+| **Build Tool** | Vite | Ultra-fast development server & optimized builds. |
+| **AI Inference** | OpenRouter / OpenAI API | Satellite terrain classification & AI Mayor policy advisor. |
+| **Geographic Data** | Overpass API | Extraction of buildings, roads, and waterways. |
+| **Hosting** | Vercel | Production edge deployments. |
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- **Node.js** ≥ 18
-- **npm** ≥ 9
-
 ### Installation
-
 ```bash
 git clone https://github.com/3esign/RealCity3000.git
 cd RealCity3000
@@ -314,56 +226,24 @@ npm install
 ```
 
 ### Development
-
 ```bash
 npm run dev
 ```
 
-Opens `http://localhost:5173` with hot module replacement.
-
-### Production Build
-
-```bash
-npm run build
-```
-
-### Vercel Deployment
-
-```bash
-vercel --token <YOUR_VERCEL_TOKEN> --prod --yes
-```
-
 ### Optional: AI Features
-To enable AI-powered satellite classification and the AI Mayor advisor, provide an API key from:
-- **OpenRouter** (recommended — access to many models)
-- **OpenAI** (GPT-4o vision)
-
-Enter your key in the "AI Inference" panel on the start screen. The simulation works fully without AI keys — it uses procedural terrain classification as fallback.
-
----
-
-## 📚 Academic References
-
-The models implemented in RealCity3000 are grounded in peer-reviewed urban science:
-
-1. **Forrester, J.W.** (1969). *Urban Dynamics*. MIT Press.
-2. **Alonso, W.** (1964). *Location and Land Use*. Harvard University Press.
-3. **Clarke, K.C., Hoppen, S., & Gaydos, L.** (1997). A self-modifying cellular automaton model of historical urbanization in the San Francisco Bay area. *Environment and Planning B*, 24(2), 247–261.
-4. **Shannon, C.E.** (1948). A Mathematical Theory of Communication. *Bell System Technical Journal*, 27(3), 379–423.
-5. **Moran, P.A.P.** (1950). Notes on continuous stochastic phenomena. *Biometrika*, 37(1/2), 17–23.
-6. **Kirkpatrick, S., Gelatt, C.D., & Vecchi, M.P.** (1983). Optimization by Simulated Annealing. *Science*, 220(4598), 671–680.
+To enable AI Mayor advice and satellite classification:
+1. Obtain an API key from **OpenRouter** or **OpenAI**.
+2. Enter the key in the "AI Inference" panel on the start screen.
+3. *Note: If no key is provided, the platform automatically falls back to procedural terrain classification and mock advisor loops.*
 
 ---
 
 ## 👥 Authors
 
-**RealCity3000** is developed for urban research and policy analysis by:
-
 **Union Nikola Tesla University Academic Staff Team**  
 *Nikola Tesla University, Belgrade*
 
 ---
-
 <p align="center">
   <sub>Built with ☕ and urban science. MIT License.</sub>
 </p>
