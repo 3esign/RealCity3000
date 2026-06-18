@@ -29,6 +29,13 @@ export class Chatbox {
     window.addEventListener('ai-mayor-response', (e) => {
       this.appendMessage('AI Mayor', e.detail.message, 'ai-message');
     });
+    
+    // Listen for AI errors via eventBus
+    import('../utils/eventBus.js').then(({ eventBus }) => {
+      eventBus.on('ai-thinking-failed', (data) => {
+        this.appendMessage('System Error', `AI communication failed: ${data.error}`, 'error-message');
+      });
+    });
   }
 
   toggleCollapse() {
@@ -63,7 +70,15 @@ export class Chatbox {
     // Pass instruction to AIMayorService
     if (this.aiMayorService) {
       this.aiMayorService.addUserInstruction(text);
-      this.appendMessage('AI Mayor', 'I have noted your instruction. I will consider it during my next simulation turn.', 'ai-message');
+      
+      const isRunning = state.simulationRunning;
+      
+      if (this.aiMayorService.isRequestPending) {
+        this.appendMessage('System', 'The AI Mayor is already evaluating previous instructions...', 'ai-message');
+      } else {
+        this.appendMessage('System', 'Instruction received. Contacting AI Mayor...', 'ai-message');
+        this.aiMayorService.runMayorTurn();
+      }
     }
   }
 

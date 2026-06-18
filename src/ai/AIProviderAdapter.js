@@ -38,6 +38,7 @@ export class AIProviderAdapter {
           },
           body: JSON.stringify({
             model: 'google/gemini-2.5-flash',
+            max_tokens: 1024,
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt }

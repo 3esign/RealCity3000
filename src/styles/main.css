@@ -988,6 +988,11 @@ html, body {
   animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Tooltip Hover Styling */
+[data-tooltip] {
+  cursor: help;
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;
